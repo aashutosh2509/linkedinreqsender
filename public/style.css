@@ -1950,5 +1950,31 @@ td {
     box-shadow: 0 0 8px rgba(59, 130, 246, 0.2);
 }
 
+/* Draggable Table Rows (Manual Shuffle) */
+.draggable-row {
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, border 0.2s ease;
+}
+.draggable-row.drag-active {
+    opacity: 0.35;
+    background: rgba(139, 92, 246, 0.08) !important;
+    border: 2px dashed rgba(139, 92, 246, 0.4) !important;
+}
+.draggable-row.drag-over {
+    border-bottom: 3px solid var(--accent-purple) !important;
+    background: rgba(139, 92, 246, 0.12) !important;
+}
+.drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+}
+.drag-handle:hover {
+    background-color: rgba(15, 23, 42, 0.06);
+}
+
 
 

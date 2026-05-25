@@ -230,6 +230,29 @@ def delete_account():
             
     return jsonify({"status": "success", "message": f"Account '{acc_to_remove.get('name')}' removed successfully."})
 
+@app.route("/api/accounts/reorder", methods=["POST"])
+def reorder_accounts():
+    req_data = request.json or {}
+    ordered_ids = req_data.get("order", [])
+    if not ordered_ids:
+        return err_response("Order list is required.")
+        
+    accounts = load_accounts_registry()
+    account_map = {a.get("id"): a for a in accounts}
+    
+    reordered_accounts = []
+    for aid in ordered_ids:
+        if aid in account_map:
+            reordered_accounts.append(account_map[aid])
+            
+    # Add any missing accounts that weren't in ordered_ids
+    for a in accounts:
+        if a.get("id") not in ordered_ids:
+            reordered_accounts.append(a)
+            
+    save_accounts_registry(reordered_accounts)
+    return jsonify({"status": "success", "message": "Accounts registry order updated."})
+
 @app.route("/api/accounts/update-config", methods=["POST"])
 def update_account_config():
     req_data = request.json or {}

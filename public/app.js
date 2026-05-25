@@ -318,22 +318,7 @@ function setupEventListeners() {
         btnRunSelectedSeq.addEventListener("click", runSelectedSequentially);
     }
 
-    const btnShuffleAccountsList = document.getElementById("btn-shuffle-accounts-list");
-    if (btnShuffleAccountsList) {
-        btnShuffleAccountsList.addEventListener("click", () => {
-            // Randomly shuffle the accountsRegistry array
-            for (let i = accountsRegistry.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [accountsRegistry[i], accountsRegistry[j]] = [accountsRegistry[j], accountsRegistry[i]];
-            }
-            // Record the new custom order of IDs to persist during polling
-            accountsCustomOrder = accountsRegistry.map(a => a.id);
-            
-            // Re-render lists
-            renderSidebarAccounts();
-            renderAdminDashboardView();
-        });
-    }
+    // Drag-and-drop manual shuffle event handling is wired up dynamically inside renderAdminDashboardView
 
     // Scheduler UI Event Handlers
     const schedulerEnabled = document.getElementById("scheduler-enabled");
@@ -817,29 +802,34 @@ function renderAdminDashboardView() {
         const isChecked = selectedAccountIdsForBulk.has(acc.id) ? "checked" : "";
             
         tableHtml += `
-            <tr>
-                <td style="text-align: center;">
+            <tr draggable="true" class="draggable-row" data-id="${acc.id}">
+                <td style="text-align: center; vertical-align: middle;">
+                    <div class="drag-handle" style="cursor: grab; color: var(--text-muted); opacity: 0.6; transition: opacity 0.2s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6">
+                        <i data-lucide="grip-vertical" style="width: 14px; height: 14px;"></i>
+                    </div>
+                </td>
+                <td style="text-align: center; vertical-align: middle;">
                     <input type="checkbox" class="account-select-checkbox custom-checkbox" data-id="${acc.id}" ${isChecked}>
                 </td>
-                <td style="font-weight: 700;">${acc.name}</td>
-                <td>${proxyBadge}</td>
-                <td><strong>${(acc.config && acc.config.daily_limit) || 25}</strong> / day</td>
-                <td style="text-align: center;"><strong>${s.total || 0}</strong></td>
-                <td style="text-align: center; color: var(--accent-blue); font-weight:600;">${s.sent || 0}</td>
-                <td style="text-align: center; color: var(--status-success); font-weight:600;">${s.connected || 0}</td>
-                <td style="text-align: center;">
+                <td style="font-weight: 700; vertical-align: middle;">${acc.name}</td>
+                <td style="vertical-align: middle;">${proxyBadge}</td>
+                <td style="vertical-align: middle;"><strong>${(acc.config && acc.config.daily_limit) || 25}</strong> / day</td>
+                <td style="text-align: center; vertical-align: middle;"><strong>${s.total || 0}</strong></td>
+                <td style="text-align: center; color: var(--accent-blue); font-weight:600; vertical-align: middle;">${s.sent || 0}</td>
+                <td style="text-align: center; color: var(--status-success); font-weight:600; vertical-align: middle;">${s.connected || 0}</td>
+                <td style="text-align: center; vertical-align: middle;">
                     <strong>${s.acceptance_rate || 0}%</strong>
                 </td>
-                <td style="font-size:0.75rem; color:var(--text-secondary); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                <td style="font-size:0.75rem; color:var(--text-secondary); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align: middle;">
                     ${acc.current_action || 'Idle'}
                 </td>
-                <td style="text-align: center;">
+                <td style="text-align: center; vertical-align: middle;">
                     <span class="status-badge ${isRunning ? 'pending' : 'not-started'}">
                         <span class="pulse-dot ${stDotClass}" style="display:inline-block; width:6px; height:6px; margin-right:4px;"></span>
                         ${stText}
                     </span>
                 </td>
-                <td style="text-align: center; white-space: nowrap;">
+                <td style="text-align: center; white-space: nowrap; vertical-align: middle;">
                     <button class="btn btn-secondary btn-sm workspace-swapper-btn" data-id="${acc.id}">
                         Open
                     </button>
@@ -854,6 +844,7 @@ function renderAdminDashboardView() {
     });
     
     adminAccountsTableBody.innerHTML = tableHtml;
+    setupRowDragAndDrop();
     
     // Bind click/change hooks to individual checkboxes
     const rowCheckboxes = adminAccountsTableBody.querySelectorAll(".account-select-checkbox");
@@ -995,20 +986,16 @@ async function quickCreateAndLoginAccount() {
 
 // POST bulk start selected accounts sequentially
 async function runSelectedSequentially() {
-    let selectedIds = Array.from(selectedAccountIdsForBulk);
-    if (selectedIds.length === 0) {
+    const selectedSet = selectedAccountIdsForBulk;
+    if (selectedSet.size === 0) {
         alert("Please select at least one account to run sequentially.");
         return;
     }
     
-    // Shuffle the run sequence if the checkbox is checked
-    const shuffleCheckbox = document.getElementById("checkbox-shuffle-seq");
-    if (shuffleCheckbox && shuffleCheckbox.checked) {
-        for (let i = selectedIds.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [selectedIds[i], selectedIds[j]] = [selectedIds[j], selectedIds[i]];
-        }
-    }
+    // Sort selected IDs based on their custom drag-and-drop index in accountsRegistry (manual sequence priority!)
+    let selectedIds = accountsRegistry
+        .map(a => a.id)
+        .filter(id => selectedSet.has(id));
     
     const btn = document.getElementById("btn-run-selected-seq");
     const originalText = btn.innerHTML;
@@ -2018,4 +2005,93 @@ function appendLogToConsole(message, type = "info") {
 
 function clearLogsPanel() {
     consoleOutput.innerHTML = `<div class="log-line info"><span class="log-time">[${new Date().toTimeString().split(' ')[0]}]</span> Console logs cleared.</div>`;
+}
+
+// ==========================================================================
+// DRAG AND DROP MANUAL ACCOUNT SHUFFLE / REORDER SYSTEM
+// ==========================================================================
+let dragSrcRow = null;
+
+function setupRowDragAndDrop() {
+    const rows = adminAccountsTableBody.querySelectorAll(".draggable-row");
+    rows.forEach(row => {
+        row.addEventListener('dragstart', handleDragStart, false);
+        row.addEventListener('dragenter', handleDragEnter, false);
+        row.addEventListener('dragover', handleDragOver, false);
+        row.addEventListener('dragleave', handleDragLeave, false);
+        row.addEventListener('drop', handleDrop, false);
+        row.addEventListener('dragend', handleDragEnd, false);
+    });
+}
+
+function handleDragStart(e) {
+    dragSrcRow = this;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', this.getAttribute('data-id'));
+    this.classList.add('drag-active');
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) {
+        e.preventDefault();
+    }
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+}
+
+function handleDragEnter(e) {
+    this.classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+    this.classList.remove('drag-over');
+}
+
+async function handleDrop(e) {
+    e.stopPropagation();
+    this.classList.remove('drag-over');
+    
+    if (dragSrcRow !== this) {
+        const srcId = dragSrcRow.getAttribute('data-id');
+        const targetId = this.getAttribute('data-id');
+        
+        const srcIndex = accountsRegistry.findIndex(a => a.id === srcId);
+        const targetIndex = accountsRegistry.findIndex(a => a.id === targetId);
+        
+        if (srcIndex !== -1 && targetIndex !== -1) {
+            // Reorder the local array
+            const [movedAcc] = accountsRegistry.splice(srcIndex, 1);
+            accountsRegistry.splice(targetIndex, 0, movedAcc);
+            
+            // Record custom order
+            accountsCustomOrder = accountsRegistry.map(a => a.id);
+            
+            // Save to backend persistently
+            await saveAccountsOrderToServer(accountsCustomOrder);
+            
+            // Re-render views immediately
+            renderSidebarAccounts();
+            renderAdminDashboardView();
+        }
+    }
+    return false;
+}
+
+function handleDragEnd(e) {
+    this.classList.remove('drag-active');
+    document.querySelectorAll('.draggable-row').forEach(row => {
+        row.classList.remove('drag-over');
+    });
+}
+
+async function saveAccountsOrderToServer(orderList) {
+    try {
+        await fetch(`${API_BASE}/accounts/reorder`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ order: orderList })
+        });
+    } catch (e) {
+        console.error("Failed persisting manual shuffle sequence to backend:", e);
+    }
 }
