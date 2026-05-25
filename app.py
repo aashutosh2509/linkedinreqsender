@@ -470,6 +470,11 @@ def reset_contacts():
 def launch_login():
     req_data = request.json or {}
     acc_id = req_data.get("account_id", "default")
+    
+    import platform
+    if platform.system().lower() == "linux":
+        return err_response("Cannot launch a physical browser window on a cloud server (Render). Please use Headless Auto-Login by entering your LinkedIn Email & Password in Account Settings and clicking 'Start Automation'.")
+        
     acc_state = get_account_state(acc_id)
     
     if acc_state.is_running:
