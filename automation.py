@@ -213,7 +213,6 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
         headless=not headed,
         viewport={"width": 1280, "height": 800},
         proxy=pw_proxy,
-        channel="chrome",
         args=[
             "--disable-blink-features=AutomationControlled",
             "--no-sandbox"
