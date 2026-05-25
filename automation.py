@@ -547,7 +547,7 @@ def scrape_contact_info(page, username, account_id="default"):
             acc_state.add_log(f"JS email extraction failed: {str(e)}", "warning")
 
         try:
-            phone_raw = page.evaluate("""() => {
+            phone_raw = page.evaluate(r"""() => {
                 const dialog = document.querySelector('.pv-contact-info-modal') ||
                                document.querySelector('.artdeco-modal') ||
                                document.querySelector('dialog[open]') ||
@@ -596,7 +596,7 @@ def scrape_contact_info(page, username, account_id="default"):
 
         connection_date = None
         try:
-            connection_date_raw = page.evaluate("""() => {
+            connection_date_raw = page.evaluate(r"""() => {
                 const dialog = document.querySelector('.pv-contact-info-modal') ||
                                document.querySelector('.artdeco-modal') ||
                                document.querySelector('dialog[open]') ||
@@ -714,7 +714,7 @@ def verify_profile_status(page, username, acc_state):
             pass
             
         # Robust JS-based connection status checker (scoped to profile top card & degree-aware)
-        status_result = page.evaluate("""
+        status_result = page.evaluate(r"""
             () => {
                 const nameHeader = document.querySelector('main h1');
                 const topCard = nameHeader ? (nameHeader.closest('.artdeco-card') || nameHeader.closest('section') || nameHeader.parentElement?.parentElement?.parentElement || document) : (document.querySelector('main section') || document);
