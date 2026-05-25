@@ -338,7 +338,7 @@ body {
    ========================================================================== */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 460px 1fr;
+    grid-template-columns: 340px 1fr;
     gap: 24px;
     align-items: start;
 }
@@ -924,10 +924,8 @@ textarea:focus {
    ========================================================================== */
 .metrics-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 18px;
-    /* Allow the last 2 cards (avg/day, acceptance) to span nicely */
-    grid-template-rows: auto auto;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
 }
 
 .metric-card {
@@ -1092,6 +1090,7 @@ textarea:focus {
 
 .quota-container {
     display: flex;
+    flex-wrap: wrap;
     gap: 16px;
     width: 100%;
 }
@@ -1371,7 +1370,7 @@ td {
    ========================================================================== */
 @media (max-width: 1400px) {
     .dashboard-grid {
-        grid-template-columns: 400px 1fr;
+        grid-template-columns: 300px 1fr;
     }
 }
 
@@ -1379,8 +1378,8 @@ td {
     .dashboard-grid {
         grid-template-columns: 1fr;
     }
-    .metrics-grid {
-        grid-template-columns: repeat(2, 1fr);
+    .metric-card--accent {
+        grid-column: span 1;
     }
 }
 
