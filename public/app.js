@@ -14,6 +14,7 @@ let currentFilteredContacts = [];
 let isSystemRunning = false;
 let pollingInterval = null;
 let selectedAccountIdsForBulk = new Set();
+let accountsCustomOrder = null; // Stores shuffled/custom order of account IDs
 
 // UI Elements: Navigation Sidebar
 const accountsMenuList = document.getElementById("accounts-menu-list");
@@ -317,6 +318,23 @@ function setupEventListeners() {
         btnRunSelectedSeq.addEventListener("click", runSelectedSequentially);
     }
 
+    const btnShuffleAccountsList = document.getElementById("btn-shuffle-accounts-list");
+    if (btnShuffleAccountsList) {
+        btnShuffleAccountsList.addEventListener("click", () => {
+            // Randomly shuffle the accountsRegistry array
+            for (let i = accountsRegistry.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [accountsRegistry[i], accountsRegistry[j]] = [accountsRegistry[j], accountsRegistry[i]];
+            }
+            // Record the new custom order of IDs to persist during polling
+            accountsCustomOrder = accountsRegistry.map(a => a.id);
+            
+            // Re-render lists
+            renderSidebarAccounts();
+            renderAdminDashboardView();
+        });
+    }
+
     // Scheduler UI Event Handlers
     const schedulerEnabled = document.getElementById("scheduler-enabled");
     const schedulerConfig = document.getElementById("scheduler-config-container");
@@ -609,7 +627,18 @@ async function fetchAccountsRegistry() {
         const response = await fetch(`${API_BASE}/accounts${queryParams}${sep}_t=${Date.now()}`);
         if (!response.ok) return;
         
-        accountsRegistry = await response.json();
+        const fetchedAccounts = await response.json();
+        if (accountsCustomOrder) {
+            fetchedAccounts.sort((a, b) => {
+                const idxA = accountsCustomOrder.indexOf(a.id);
+                const idxB = accountsCustomOrder.indexOf(b.id);
+                if (idxA === -1 && idxB === -1) return 0;
+                if (idxA === -1) return 1;
+                if (idxB === -1) return -1;
+                return idxA - idxB;
+            });
+        }
+        accountsRegistry = fetchedAccounts;
         
         // Populate accounts lists in sidebar switcher
         renderSidebarAccounts();
@@ -966,10 +995,19 @@ async function quickCreateAndLoginAccount() {
 
 // POST bulk start selected accounts sequentially
 async function runSelectedSequentially() {
-    const selectedIds = Array.from(selectedAccountIdsForBulk);
+    let selectedIds = Array.from(selectedAccountIdsForBulk);
     if (selectedIds.length === 0) {
         alert("Please select at least one account to run sequentially.");
         return;
+    }
+    
+    // Shuffle the run sequence if the checkbox is checked
+    const shuffleCheckbox = document.getElementById("checkbox-shuffle-seq");
+    if (shuffleCheckbox && shuffleCheckbox.checked) {
+        for (let i = selectedIds.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [selectedIds[i], selectedIds[j]] = [selectedIds[j], selectedIds[i]];
+        }
     }
     
     const btn = document.getElementById("btn-run-selected-seq");

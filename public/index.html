@@ -147,6 +147,9 @@
                         <div class="table-header-left">
                             <h3 id="admin-table-title">Registered LinkedIn Profiles</h3>
                             <span class="count-tag" id="accounts-count-tag">0 accounts</span>
+                            <button id="btn-shuffle-accounts-list" class="btn btn-secondary-outline btn-sm" title="Shuffle visual order of accounts list" style="padding: 4px 8px; width: auto; font-size: 0.72rem; display: inline-flex; align-items: center; gap: 4px; margin-left: 4px;">
+                                <i data-lucide="shuffle" style="width: 12px; height: 12px;"></i> Shuffle List
+                            </button>
                         </div>
                         <div class="table-header-right">
                             <div class="filter-dropdown-container" style="margin-right: 8px;">
@@ -167,6 +170,12 @@
                                     <option value="month">Past Month</option>
                                     <option value="custom">Custom Range</option>
                                 </select>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px; margin-right: 8px;">
+                                <input type="checkbox" id="checkbox-shuffle-seq" class="custom-checkbox">
+                                <label for="checkbox-shuffle-seq" style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                                    Shuffle Run Order
+                                </label>
                             </div>
                             <button id="btn-run-selected-seq" class="btn btn-success btn-sm btn-glow" style="width: auto;">
                                 <i data-lucide="play"></i> Run Selected Sequentially
