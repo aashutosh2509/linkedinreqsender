@@ -56,6 +56,8 @@ const delayMinInput = document.getElementById("delay-min");
 const delayMaxInput = document.getElementById("delay-max");
 const dailyLimitInput = document.getElementById("daily-limit");
 const weeklyLimitInput = document.getElementById("weekly-limit");
+const liUserInput = document.getElementById("workspace-li-user");
+const liPassInput = document.getElementById("workspace-li-pass");
 const workspaceProxyIndicator = document.getElementById("workspace-proxy-indicator");
 const btnSaveSettings = document.getElementById("btn-save-settings");
 
@@ -442,6 +444,8 @@ async function switchWorkspace(accountId) {
         delayMaxInput.value = cfg.delay_max || 70;
         dailyLimitInput.value = cfg.daily_limit || 25;
         weeklyLimitInput.value = cfg.weekly_limit || 150;
+        liUserInput.value = acc.li_username || "";
+        liPassInput.value = acc.li_password || "";
         
         sendWithNoteCheckbox.checked = cfg.send_with_note || false;
         noteTemplateTextarea.value = cfg.note_template || "";
@@ -1032,6 +1036,8 @@ async function saveWorkspaceSettings() {
     
     const payload = {
         id: currentAccountId,
+        li_username: liUserInput.value.trim(),
+        li_password: liPassInput.value.trim(),
         config: {
             note_template: noteTemplateTextarea.value,
             send_with_note: sendWithNoteCheckbox.checked,
