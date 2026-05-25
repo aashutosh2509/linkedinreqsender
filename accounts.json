@@ -1,0 +1,52 @@
+[
+    {
+        "id": "default",
+        "name": "AASHUTOSH KHARE",
+        "proxy": null,
+        "config": {
+            "note_template": "Hi {FirstName}, lets connect!",
+            "send_with_note": false,
+            "delay_min": 30,
+            "delay_max": 70,
+            "daily_limit": 25,
+            "weekly_limit": 150,
+            "schedule": {
+                "enabled": false,
+                "time": "11:37",
+                "days": [
+                    0
+                ],
+                "last_run": null
+            },
+            "start_index": 24,
+            "end_index": 24
+        },
+        "status": "Idle",
+        "current_action": "Idle",
+        "progress_percent": 0
+    },
+    {
+        "id": "profile_2_9950",
+        "name": "NIKITA HR",
+        "proxy": null,
+        "config": {
+            "note_template": "Hi {FirstName}, let's connect!",
+            "send_with_note": false,
+            "delay_min": 30,
+            "delay_max": 70,
+            "daily_limit": 25,
+            "weekly_limit": 150,
+            "start_index": 25,
+            "end_index": 25,
+            "schedule": {
+                "enabled": false,
+                "time": "13:01",
+                "days": [],
+                "last_run": null
+            }
+        },
+        "status": "Idle",
+        "current_action": "Idle",
+        "progress_percent": 0
+    }
+]

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkConnect // Premium LinkedIn Automator & Dashboard</title>
+    
+    <!-- Modern Typography & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Style Sheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glow-bg-elements">
+        <div class="glow-sphere glow-1"></div>
+        <div class="glow-sphere glow-2"></div>
+        <div class="glow-sphere glow-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- TOP BRAND NAV -->
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="logo-icon">
+                    <i data-lucide="zap"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>Link<span>Connect</span></h1>
+                    <p>ELITE LINKEDIN AUTOMATION</p>
+                </div>
+            </div>
+            
+            <div class="header-status">
+                <div class="status-indicator">
+                    <span class="pulse-dot" id="system-status-dot"></span>
+                    <span id="system-status-text">System Idle</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN LAYOUT -->
+        <main class="dashboard-grid">
+            
+            <!-- LEFT PANEL: CONTROLS & LOGS -->
+            <section class="control-sidebar">
+                
+                <!-- BROWSER SESSION CARD -->
+                <div class="glass-card panel-card" id="session-setup-card">
+                    <div class="card-header">
+                        <div class="card-title-icon"><i data-lucide="chrome"></i></div>
+                        <h3>Browser Session</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-desc">Open a dedicated browser to log in to LinkedIn. Playwright will store your secure cookies locally so you only need to log in once.</p>
+                        <button id="btn-launch-login" class="btn btn-primary btn-glow">
+                            <i data-lucide="external-link"></i> Launch Browser / Login
+                        </button>
+                    </div>
+                </div>
+
+                <!-- EXCEL UPLOAD CARD -->
+                <div class="glass-card panel-card" id="excel-upload-card">
+                    <div class="card-header">
+                        <div class="card-title-icon"><i data-lucide="file-spreadsheet"></i></div>
+                        <h3>Load Excel Sheet</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="upload-form" enctype="multipart/form-data">
+                            <div class="drop-zone" id="excel-drop-zone">
+                                <i data-lucide="upload-cloud" class="upload-icon"></i>
+                                <span class="drop-zone-text">Drag & drop your Excel file here or click to browse</span>
+                                <input type="file" name="file" id="excel-file-input" accept=".xlsx, .xls" hidden>
+                            </div>
+                        </form>
+                        <div class="template-hint">
+                            <i data-lucide="info"></i>
+                            <span>Must contain a column for <strong>LinkedIn profile URLs</strong> (e.g. <code>LinkedIn</code>).</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- QUICK ADD CARD -->
+                <div class="glass-card panel-card" id="quick-add-card">
+                    <div class="card-header">
+                        <div class="card-title-icon"><i data-lucide="link"></i></div>
+                        <h3>Add Single Profile URL</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="quick-add-form">
+                            <div class="form-group">
+                                <input type="text" id="quick-url-input" placeholder="Paste LinkedIn profile URL here..." class="quick-input">
+                            </div>
+                            <div class="form-row margin-top-8">
+                                <div class="form-group flex-grow-1">
+                                    <input type="text" id="quick-name-input" placeholder="Name (Optional)" class="quick-input">
+                                </div>
+                            </div>
+                            <button id="btn-quick-add" class="btn btn-secondary margin-top-8 btn-full-width">
+                                <i data-lucide="plus"></i> Add to Database
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+
+                <!-- SAFE SETTINGS CARD -->
+                <div class="glass-card panel-card" id="settings-card">
+                    <div class="card-header">
+                        <div class="card-title-icon"><i data-lucide="shield-check"></i></div>
+                        <h3>Safety & Delay Settings</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="delay-min">Min Delay (sec)</label>
+                                <input type="number" id="delay-min" min="10" max="600" value="30">
+                            </div>
+                            <div class="form-group">
+                                <label for="delay-max">Max Delay (sec)</label>
+                                <input type="number" id="delay-max" min="15" max="1200" value="70">
+                            </div>
+                        </div>
+                        <div class="form-group margin-top-12">
+                            <label for="daily-limit">Daily Request Limit</label>
+                            <input type="number" id="daily-limit" min="1" max="100" value="50">
+                            <span class="input-hint">Recommended: 30-50 to protect account.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PERSONALIZATION BUILDER -->
+                <div class="glass-card panel-card" id="template-card">
+                    <div class="card-header">
+                        <div class="card-title-icon"><i data-lucide="message-square"></i></div>
+                        <h3>Connection Message</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="toggle-container">
+                            <label class="switch">
+                                <input type="checkbox" id="send-with-note">
+                                <span class="slider"></span>
+                            </label>
+                            <span class="toggle-label">Include personalized note</span>
+                        </div>
+                        
+                        <div id="note-template-container">
+                            <textarea id="note-template" placeholder="Hi {FirstName}, I saw your profile and would love to connect..." maxlength="300"></textarea>
+                            <div class="char-counter"><span id="char-count">0</span> / 300 characters</div>
+                            
+                            <div class="tags-palette">
+                                <span class="tag-badge" data-tag="{FirstName}">{FirstName}</span>
+                                <span class="tag-badge" data-tag="{LastName}">{LastName}</span>
+                                <span class="tag-badge" data-tag="{Company}">{Company}</span>
+                                <span class="tag-badge" data-tag="{Title}">{Title}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AUTOMATION CONTROLS -->
+                <div class="glass-card panel-card highlight-border" id="actions-card">
+                    <div class="card-header">
+                        <div class="card-title-icon"><i data-lucide="play-circle"></i></div>
+                        <h3>Action Dashboard</h3>
+                    </div>
+                    <div class="card-body">
+                        <!-- SELECTIVE RANGE INPUTS -->
+                        <div class="selective-send-container margin-bottom-12">
+                            <div class="selective-send-header">
+                                <i data-lucide="list-ordered"></i>
+                                <span>Selective Range (Optional)</span>
+                            </div>
+                            <div class="selective-send-inputs">
+                                <div class="form-group flex-1">
+                                    <label for="range-start">Sr. Start</label>
+                                    <input type="number" id="range-start" min="1" placeholder="e.g. 5">
+                                </div>
+                                <div class="form-group flex-1">
+                                    <label for="range-end">Sr. End</label>
+                                    <input type="number" id="range-end" min="1" placeholder="e.g. 10">
+                                </div>
+                            </div>
+                            <span class="input-hint">Specify database range of contacts to process.</span>
+                        </div>
+
+                        <div class="action-btn-row">
+                            <button id="btn-start" class="btn btn-success btn-grow" disabled>
+                                <i data-lucide="play"></i> Start Sending
+                            </button>
+                            <button id="btn-stop" class="btn btn-danger btn-grow" disabled>
+                                <i data-lucide="square"></i> Pause
+                            </button>
+                        </div>
+                        <button id="btn-sync" class="btn btn-secondary margin-top-12">
+                            <i data-lucide="refresh-cw"></i> Sync Accepted Requests
+                        </button>
+                    </div>
+                </div>
+
+                <!-- REAL-TIME CONSOLE -->
+                <div class="glass-card panel-card flex-grow-card" id="console-card">
+                    <div class="card-header">
+                        <div class="card-title-icon"><i data-lucide="terminal"></i></div>
+                        <h3>Activity Terminal</h3>
+                        <button id="btn-clear-logs" class="btn-icon-only" title="Clear Logs"><i data-lucide="trash-2"></i></button>
+                    </div>
+                    <div class="console-body" id="console-output">
+                        <!-- Terminal logs go here -->
+                        <div class="log-line info"><span class="log-time">[00:00:00]</span> Welcome to LinkConnect console. Import an Excel list and log in to start automation.</div>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- RIGHT PANEL: METRICS & LEADS TABLE -->
+            <section class="leads-dashboard">
+                
+                <!-- METRICS GRID -->
+                <div class="metrics-grid">
+                    
+                    <div class="glass-card metric-card">
+                        <div class="metric-icon bg-purple"><i data-lucide="users"></i></div>
+                        <div class="metric-data">
+                            <h4 id="stat-total">0</h4>
+                            <p>Total Profiles</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-card metric-card">
+                        <div class="metric-icon bg-blue"><i data-lucide="send"></i></div>
+                        <div class="metric-data">
+                            <h4 id="stat-sent">0</h4>
+                            <p>Requests Sent</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-card metric-card">
+                        <div class="metric-icon bg-yellow"><i data-lucide="clock"></i></div>
+                        <div class="metric-data">
+                            <h4 id="stat-pending">0</h4>
+                            <p>Pending</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-card metric-card">
+                        <div class="metric-icon bg-green"><i data-lucide="check-circle2"></i></div>
+                        <div class="metric-data">
+                            <h4 id="stat-connected">0</h4>
+                            <p>Connected</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- QUOTA PROGRESS CARD -->
+                <div class="glass-card progress-card">
+                    <div class="progress-info">
+                        <div class="progress-label">
+                            <i data-lucide="gauge"></i> Safe Daily Quota Limit
+                        </div>
+                        <div class="progress-stats">
+                            <span id="quota-current">0</span> / <span id="quota-max">50</span> requests
+                        </div>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="quota-bar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- TABLE CARD -->
+                <div class="glass-card table-card">
+                    <div class="table-header-bar">
+                        <div class="table-header-left">
+                            <h3>Prospect Database</h3>
+                            <span class="count-tag" id="contacts-count">0 contacts</span>
+                        </div>
+                        <div class="table-header-right">
+                            <div class="search-box">
+                                <i data-lucide="search"></i>
+                                <input type="text" id="table-search" placeholder="Search by name, company, or status...">
+                            </div>
+                            
+                            <div class="filter-dropdown-container">
+                                <select id="status-filter" class="filter-select">
+                                    <option value="all">All Statuses</option>
+                                    <option value="Not Started">Not Started</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="Connected">Connected</option>
+                                    <option value="Failed">Failed</option>
+                                </select>
+                            </div>
+
+                            <div class="filter-dropdown-container">
+                                <select id="date-filter" class="filter-select">
+                                    <option value="all">All Time</option>
+                                    <option value="today">Today</option>
+                                    <option value="yesterday">Yesterday</option>
+                                    <option value="week">Past Week</option>
+                                    <option value="month">Past Month</option>
+                                    <option value="custom">Custom Range</option>
+                                </select>
+                            </div>
+                            
+                            <button id="btn-reset-contacts" class="btn btn-secondary-outline btn-sm" title="Reset contacts status to Not Started">
+                                <i data-lucide="rotate-ccw"></i> Reset
+                            </button>
+                            
+                            <button id="btn-clear-db" class="btn btn-danger-outline btn-sm" title="Clear entire database">
+                                <i data-lucide="trash-2"></i> Clear DB
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- CUSTOM DATE RANGE PANEL -->
+                    <div id="custom-date-container" class="custom-date-panel" style="display: none;">
+                        <div class="custom-date-inputs">
+                            <div class="custom-date-group">
+                                <label for="custom-start-date">Start Date</label>
+                                <input type="date" id="custom-start-date">
+                            </div>
+                            <div class="custom-date-group">
+                                <label for="custom-end-date">End Date</label>
+                                <input type="date" id="custom-end-date">
+                            </div>
+                        </div>
+                        <div class="custom-date-actions">
+                            <button id="btn-apply-date" class="btn btn-primary btn-sm">Apply</button>
+                            <button id="btn-clear-date" class="btn btn-secondary-outline btn-sm">Clear</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table id="contacts-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 60px; text-align: center;">#</th>
+                                    <th>Name / Title</th>
+                                    <th>Company</th>
+                                    <th>Profile URL</th>
+                                    <th>Status</th>
+                                    <th>Date Sent / Sync</th>
+                                    <th style="width: 80px; text-align: center;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body">
+                                <tr>
+                                    <td colspan="7" class="empty-table-state">
+                                        <div class="empty-state-content">
+                                            <i data-lucide="file-x"></i>
+                                            <p>No contacts loaded yet.</p>
+                                            <span class="sub-text">Drag and drop an Excel file in the sidebar to populate the database.</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Frontend logic -->
+    <script src="app.js"></script>
+</body>
+</html>

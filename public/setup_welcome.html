@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NBConnect // Chrome Profile Setup & Onboarding</title>
+    
+    <!-- Modern Typography & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Link to Dashboard Style Sheet for exact styling consistency -->
+    <link rel="stylesheet" href="style.css">
+    
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            background-color: var(--bg-primary);
+        }
+        
+        .onboarding-card {
+            max-width: 640px;
+            width: 100%;
+            padding: 40px;
+            border-radius: 24px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+            text-align: center;
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .onboarding-logo {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+            color: #fff;
+            box-shadow: 0 0 25px var(--accent-purple-glow);
+            margin-bottom: 20px;
+        }
+        
+        .onboarding-logo i {
+            width: 30px;
+            height: 30px;
+        }
+        
+        .onboarding-title {
+            font-size: 2.2rem;
+            font-weight: 800;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+        
+        .onboarding-title span {
+            background: linear-gradient(to right, var(--accent-purple), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .onboarding-subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+        }
+        
+        .profile-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 30px;
+            background: rgba(124, 58, 237, 0.08);
+            border: 1px solid rgba(124, 58, 237, 0.15);
+            color: var(--accent-purple);
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 24px;
+        }
+        
+        .steps-container {
+            text-align: left;
+            margin-bottom: 35px;
+        }
+        
+        .step-row {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 24px;
+            padding: 16px;
+            border-radius: 16px;
+            background: rgba(15, 23, 42, 0.02);
+            border: 1px solid rgba(15, 23, 42, 0.03);
+            transition: var(--transition-smooth);
+        }
+        
+        .step-row:hover {
+            transform: translateY(-2px);
+            background: rgba(15, 23, 42, 0.04);
+            border-color: rgba(124, 58, 237, 0.12);
+        }
+        
+        .step-number {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+            color: white;
+            font-weight: 700;
+            font-size: 0.95rem;
+            flex-shrink: 0;
+            box-shadow: 0 4px 10px rgba(124, 58, 237, 0.2);
+        }
+        
+        .step-content h4 {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        
+        .step-content p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.45;
+        }
+        
+        .onboarding-btn {
+            font-size: 1.1rem;
+            padding: 14px 28px;
+            font-weight: 600;
+            border-radius: 14px;
+            cursor: pointer;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 10px 25px rgba(2, 132, 199, 0.3);
+            transition: var(--transition-smooth);
+        }
+        
+        .onboarding-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(2, 132, 199, 0.4);
+        }
+        
+        .onboarding-footer {
+            margin-top: 24px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div class="glow-bg-elements">
+        <div class="glow-sphere glow-1"></div>
+        <div class="glow-sphere glow-2"></div>
+        <div class="glow-sphere glow-3"></div>
+    </div>
+
+    <div class="onboarding-card">
+        <div class="onboarding-logo">
+            <i data-lucide="sparkles"></i>
+        </div>
+        
+        <h2 class="onboarding-title">Browser <span>Setup</span> First</h2>
+        <p class="onboarding-subtitle">Configure your Chrome staff before logging in to LinkedIn</p>
+        
+        <div class="profile-badge" id="profile-badge-el">
+            <i data-lucide="user"></i>
+            <span id="account-name-span">Loading Profile...</span>
+        </div>
+        
+        <div class="steps-container">
+            <!-- STEP 1 -->
+            <div class="step-row">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h4>Sign in & Sync Chrome Staff</h4>
+                    <p>Click the <strong>Profile Icon</strong> in the top-right corner of Google Chrome. Sign in to your Google Account to automatically sync your extensions, settings, and standard browser configuration.</p>
+                </div>
+            </div>
+            
+            <!-- STEP 2 -->
+            <div class="step-row">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h4>Review Extensions & Tools</h4>
+                    <p>Ensure any essential extensions you normally use (e.g. password managers, verification assistants) are active and configured in this isolated space.</p>
+                </div>
+            </div>
+            
+            <!-- STEP 3 -->
+            <div class="step-row">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h4>Log In to LinkedIn</h4>
+                    <p>When the browser setup is complete, click the button below to navigate directly to the LinkedIn login page and complete your LinkedIn authentication.</p>
+                </div>
+            </div>
+        </div>
+        
+        <button class="btn btn-primary onboarding-btn" id="btn-goto-linkedin">
+            Go to LinkedIn Login <i data-lucide="arrow-right"></i>
+        </button>
+        
+        <p class="onboarding-footer">
+            <i data-lucide="info" style="width: 12px; height: 12px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i>
+            <strong>Secure Session Lock:</strong> Closing this browser window saves all active cookies, extensions, and logins. Future dashboard automation runs will reuse this exact setup automatically.
+        </p>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            lucide.createIcons();
+            
+            // Parse query parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const accountId = urlParams.get("account_id") || "default";
+            
+            // Format a nice display name
+            let displayName = accountId;
+            if (accountId === "default") {
+                displayName = "Primary Default Profile";
+            } else {
+                // profile_2_9950 -> Profile 2
+                const match = accountId.match(/profile_(\d+)/i);
+                if (match) {
+                    displayName = `Profile Workspace ${match[1]}`;
+                } else {
+                    displayName = accountId.charAt(0).toUpperCase() + accountId.slice(1) + " Workspace";
+                }
+            }
+            
+            document.getElementById("account-name-span").textContent = displayName;
+            
+            // Navigate to LinkedIn Login
+            const btn = document.getElementById("btn-goto-linkedin");
+            btn.addEventListener("click", () => {
+                btn.disabled = true;
+                btn.innerHTML = `<i data-lucide="loader" class="animate-spin" style="width:18px; height:18px; margin-right:8px; display:inline-block; vertical-align:middle;"></i> Opening LinkedIn...`;
+                lucide.createIcons();
+                
+                // Navigate current tab to LinkedIn Login
+                window.location.href = "https://www.linkedin.com/login";
+            });
+        });
+    </script>
+</body>
+</html>

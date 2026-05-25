@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NBConnect // Premium Multi-Account Automator & Admin Dashboard</title>
+    
+    <!-- Modern Typography & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Style Sheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="glow-bg-elements">
+        <div class="glow-sphere glow-1"></div>
+        <div class="glow-sphere glow-2"></div>
+        <div class="glow-sphere glow-3"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- LEFT SIDEBAR: ACCOUNT LIST SWITCHER -->
+        <aside class="sidebar-navigation">
+            <div class="logo-area">
+                <img src="logo.png" alt="NB Entrepreneurs Logo" style="height: 48px; width: auto; object-fit: contain;">
+                <div class="logo-text">
+                    <h1>NB<span>Connect</span></h1>
+                    <p>MULTI-ACCOUNT HUB</p>
+                </div>
+            </div>
+            
+            <div class="sidebar-section-title">ADMINISTRATOR</div>
+            <div class="accounts-menu-list">
+                <button class="account-item active" data-account-id="admin" id="item-admin-tab">
+                    <div class="item-icon bg-gradient-admin"><i data-lucide="layout-dashboard"></i></div>
+                    <div class="item-info">
+                        <span class="acc-name">Admin Dashboard</span>
+                        <span class="acc-status">Overall Analytics</span>
+                    </div>
+                </button>
+            </div>
+
+            <div class="sidebar-section-title">LINKEDIN ACCOUNTS</div>
+            <div class="accounts-menu-list scrollable-accounts-list" id="accounts-menu-list">
+                <!-- Dynamically populated LinkedIn accounts -->
+            </div>
+            
+            <button class="btn btn-secondary-outline margin-top-auto btn-full-width" id="btn-open-add-account-modal">
+                <i data-lucide="plus-circle"></i> Add New Account
+            </button>
+        </aside>
+
+        <!-- RIGHT SIDE: WORKSPACE WRAPPER -->
+        <div class="workspace-container">
+            <!-- TOP BRAND NAV -->
+            <header class="app-header">
+                <div class="workspace-header-title">
+                    <div class="workspace-title-row" id="workspace-title-display-row">
+                        <h2 id="workspace-title">Admin Dashboard</h2>
+                        <button id="btn-rename-workspace" class="btn-rename-inline" title="Click to rename this account" style="display:none;">
+                            <i data-lucide="pencil" style="width:14px;height:14px;"></i>
+                        </button>
+                    </div>
+                    <div class="workspace-title-edit-row" id="workspace-title-edit-row" style="display:none;">
+                        <input type="text" id="workspace-title-input" class="inline-title-input" placeholder="Enter account name..." maxlength="50">
+                        <button id="btn-rename-confirm" class="btn-rename-confirm" title="Save name">
+                            <i data-lucide="check" style="width:14px;height:14px;"></i>
+                        </button>
+                        <button id="btn-rename-cancel" class="btn-rename-cancel" title="Cancel">
+                            <i data-lucide="x" style="width:14px;height:14px;"></i>
+                        </button>
+                    </div>
+                    <p id="workspace-subtitle">Aggregated system-wide analytics & stats</p>
+                </div>
+                
+                <div class="header-status">
+                    <div class="status-indicator">
+                        <span class="pulse-dot grey-pulse" id="system-status-dot"></span>
+                        <span id="system-status-text">System Idle</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- MAIN WORKSPACE VIEWS -->
+            
+            <!-- 1. CENTRAL AGGREGATED ADMIN VIEW -->
+            <div id="view-admin" class="view-panel active">
+                <div class="metrics-grid">
+                    <div class="glass-card metric-card">
+                        <div class="metric-icon bg-purple"><i data-lucide="users"></i></div>
+                        <div class="metric-data">
+                            <h4 id="admin-stat-total">0</h4>
+                            <p>Total Profiles</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-card metric-card">
+                        <div class="metric-icon bg-blue"><i data-lucide="send"></i></div>
+                        <div class="metric-data">
+                            <h4 id="admin-stat-sent">0</h4>
+                            <p>Requests Sent</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-card metric-card">
+                        <div class="metric-icon bg-yellow"><i data-lucide="clock"></i></div>
+                        <div class="metric-data">
+                            <h4 id="admin-stat-pending">0</h4>
+                            <p>Pending</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-card metric-card">
+                        <div class="metric-icon bg-green"><i data-lucide="check-circle2"></i></div>
+                        <div class="metric-data">
+                            <h4 id="admin-stat-connected">0</h4>
+                            <p>Connected</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-card metric-card metric-card--accent">
+                        <div class="metric-icon bg-teal"><i data-lucide="trending-up"></i></div>
+                        <div class="metric-data">
+                            <h4 id="admin-stat-avg-day">0<span class="metric-unit">/day</span></h4>
+                            <p>Avg Requests/Day</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-card metric-card metric-card--accent">
+                        <div class="metric-icon bg-pink"><i data-lucide="percent"></i></div>
+                        <div class="metric-data">
+                            <h4 id="admin-stat-accept-rate">0<span class="metric-unit">%</span></h4>
+                            <p>Acceptance Rate</p>
+                            <div class="accept-rate-bar-bg">
+                                <div class="accept-rate-bar-fill" id="admin-accept-rate-bar" style="width:0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ADMIN ACCOUNTS GRID -->
+                <div class="glass-card table-card margin-top-24">
+                    <div class="table-header-bar">
+                        <div class="table-header-left">
+                            <h3 id="admin-table-title">Registered LinkedIn Profiles</h3>
+                            <span class="count-tag" id="accounts-count-tag">0 accounts</span>
+                        </div>
+                        <div class="table-header-right">
+                            <div class="filter-dropdown-container" style="margin-right: 8px;">
+                                <select id="admin-status-filter" class="filter-select">
+                                    <option value="all">All Statuses</option>
+                                    <option value="Not Started">Not Started</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="Connected">Connected</option>
+                                    <option value="Failed">Failed</option>
+                                </select>
+                            </div>
+                            <div class="filter-dropdown-container" style="margin-right: 8px;">
+                                <select id="admin-date-filter" class="filter-select">
+                                    <option value="all">All Time</option>
+                                    <option value="today">Today</option>
+                                    <option value="yesterday">Yesterday</option>
+                                    <option value="week">Past Week</option>
+                                    <option value="month">Past Month</option>
+                                    <option value="custom">Custom Range</option>
+                                </select>
+                            </div>
+                            <button id="btn-run-selected-seq" class="btn btn-success btn-sm btn-glow" style="width: auto;">
+                                <i data-lucide="play"></i> Run Selected Sequentially
+                            </button>
+                        </div>
+                    </div>
+                    <!-- ADMIN CUSTOM DATE RANGE PANEL -->
+                    <div id="admin-custom-date-container" class="custom-date-panel" style="display: none; padding: 12px 20px; border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.02);">
+                        <div class="custom-date-inputs">
+                            <div class="custom-date-group">
+                                <label for="admin-custom-start-date">Start Date</label>
+                                <input type="date" id="admin-custom-start-date">
+                            </div>
+                            <div class="custom-date-group">
+                                <label for="admin-custom-end-date">End Date</label>
+                                <input type="date" id="admin-custom-end-date">
+                            </div>
+                        </div>
+                        <div class="custom-date-actions">
+                            <button id="admin-btn-apply-date" class="btn btn-primary btn-sm">Apply</button>
+                            <button id="admin-btn-clear-date" class="btn btn-secondary-outline btn-sm">Clear</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px; text-align: center;"><input type="checkbox" id="checkbox-select-all-accounts" class="custom-checkbox"></th>
+                                    <th>Account Name</th>
+                                    <th>Proxy Routing</th>
+                                    <th>Daily Limit</th>
+                                    <th style="text-align: center;">Total Database</th>
+                                    <th style="text-align: center;">Sent</th>
+                                    <th style="text-align: center;">Connected</th>
+                                    <th style="text-align: center;">Acceptance Rate</th>
+                                    <th>Current Action</th>
+                                    <th style="text-align: center;">Status</th>
+                                    <th style="width: 130px; text-align: center;">Workspace</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-accounts-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. SPECIFIC ACCOUNT WORKSPACE VIEW -->
+            <div id="view-workspace" class="view-panel" style="display: none;">
+                <main class="dashboard-grid">
+                    
+                    <!-- LEFT PANEL: WORKSPACE CONTROLS -->
+                    <section class="control-sidebar">
+                        
+                        <!-- BROWSER SESSION CARD -->
+                        <div class="glass-card panel-card" id="session-setup-card">
+                            <div class="card-header">
+                                <div class="card-title-icon"><i data-lucide="chrome"></i></div>
+                                <h3>Browser Session</h3>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-desc">Open a dedicated browser to log in to LinkedIn. Playwright will store your secure cookies locally so you only need to log in once.</p>
+                                <button id="btn-launch-login" class="btn btn-primary btn-glow btn-full-width">
+                                    <i data-lucide="external-link"></i> Launch Browser / Login
+                                </button>
+                                <button id="btn-check-login" class="btn btn-secondary-outline btn-full-width margin-top-8">
+                                    <i data-lucide="shield-check"></i> Check Login Status
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- EXCEL UPLOAD CARD -->
+                        <div class="glass-card panel-card" id="excel-upload-card">
+                            <div class="card-header">
+                                <div class="card-title-icon"><i data-lucide="file-spreadsheet"></i></div>
+                                <h3>Load Excel Sheet</h3>
+                            </div>
+                            <div class="card-body">
+                                <form id="upload-form" enctype="multipart/form-data">
+                                    <div class="drop-zone" id="excel-drop-zone">
+                                        <i data-lucide="upload-cloud" class="upload-icon"></i>
+                                        <span class="drop-zone-text">Drag & drop your Excel file here or click to browse</span>
+                                        <input type="file" name="file" id="excel-file-input" accept=".xlsx, .xls" hidden>
+                                    </div>
+                                </form>
+                                <div class="template-hint">
+                                    <i data-lucide="info"></i>
+                                    <span>Must contain a column for <strong>LinkedIn profile URLs</strong> (e.g. <code>LinkedIn</code>).</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- QUICK ADD CARD -->
+                        <div class="glass-card panel-card" id="quick-add-card">
+                            <div class="card-header">
+                                <div class="card-title-icon"><i data-lucide="link"></i></div>
+                                <h3>Add Single Profile URL</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="quick-add-form">
+                                    <div class="form-group">
+                                        <input type="text" id="quick-url-input" placeholder="Paste LinkedIn profile URL here..." class="quick-input">
+                                    </div>
+                                    <div class="form-row margin-top-8">
+                                        <div class="form-group flex-grow-1">
+                                            <input type="text" id="quick-name-input" placeholder="Name (Optional)" class="quick-input">
+                                        </div>
+                                    </div>
+                                    <button id="btn-quick-add" class="btn btn-secondary margin-top-8 btn-full-width">
+                                        <i data-lucide="plus"></i> Add to Database
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SAFE SETTINGS CARD -->
+                        <div class="glass-card panel-card" id="settings-card">
+                            <div class="card-header">
+                                <div class="card-title-icon"><i data-lucide="shield-check"></i></div>
+                                <h3>Workspace Safety Settings</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="delay-min">Min Delay (sec)</label>
+                                        <input type="number" id="delay-min" min="10" max="600" value="30">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="delay-max">Max Delay (sec)</label>
+                                        <input type="number" id="delay-max" min="15" max="1200" value="70">
+                                    </div>
+                                </div>
+                                <div class="form-row margin-top-12">
+                                    <div class="form-group flex-1">
+                                        <label for="daily-limit">Daily Limit</label>
+                                        <input type="number" id="daily-limit" min="1" max="50" value="25">
+                                    </div>
+                                    <div class="form-group flex-1">
+                                        <label for="weekly-limit">Weekly Limit</label>
+                                        <input type="number" id="weekly-limit" min="1" max="350" value="150">
+                                    </div>
+                                </div>
+
+                                <div class="proxy-badge-indicator margin-top-12" id="workspace-proxy-indicator" style="display:none;">
+                                    <i data-lucide="globe"></i> Proxy Route Active
+                                </div>
+                                <span class="input-hint">Recommended limits: Daily 15-25, Weekly 100-150. Save updates by editing configurations.</span>
+                                <button id="btn-save-settings" class="btn btn-secondary btn-sm margin-top-12 btn-full-width">
+                                    <i data-lucide="save"></i> Update Configuration
+                                </button>
+                                <button id="btn-delete-account-workspace" class="btn btn-danger-outline btn-sm margin-top-8 btn-full-width" style="display: none;">
+                                    <i data-lucide="trash-2"></i> Delete Account Profile
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- SCHEDULER SETTINGS CARD -->
+                        <div class="glass-card panel-card" id="scheduler-card">
+                            <div class="card-header">
+                                <div class="card-title-icon"><i data-lucide="clock"></i></div>
+                                <h3>Automation Scheduler</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="toggle-container">
+                                    <label class="switch">
+                                        <input type="checkbox" id="scheduler-enabled">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span class="toggle-label">Enable Daily Scheduler</span>
+                                </div>
+                                
+                                <div id="scheduler-config-container" style="display: none; margin-top: 12px;">
+                                    <div class="form-group">
+                                        <label for="scheduler-time">Scheduled Time (HH:MM)</label>
+                                        <input type="time" id="scheduler-time" value="10:00" class="time-input">
+                                    </div>
+                                    
+                                    <div class="form-group margin-top-12">
+                                        <label>Active Days</label>
+                                        <div class="weekday-selector margin-top-4">
+                                            <button class="day-btn" data-day="0" title="Monday">M</button>
+                                            <button class="day-btn" data-day="1" title="Tuesday">T</button>
+                                            <button class="day-btn" data-day="2" title="Wednesday">W</button>
+                                            <button class="day-btn" data-day="3" title="Thursday">T</button>
+                                            <button class="day-btn" data-day="4" title="Friday">F</button>
+                                            <button class="day-btn" data-day="5" title="Saturday">S</button>
+                                            <button class="day-btn" data-day="6" title="Sunday">S</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-row margin-top-12">
+                                        <div class="form-group flex-1">
+                                            <label for="scheduler-start-idx">Sr. Start (Optional)</label>
+                                            <input type="number" id="scheduler-start-idx" min="1" placeholder="e.g. 1" class="time-input">
+                                        </div>
+                                        <div class="form-group flex-1">
+                                            <label for="scheduler-end-idx">Sr. End (Optional)</label>
+                                            <input type="number" id="scheduler-end-idx" min="1" placeholder="e.g. 50" class="time-input">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <span class="input-hint margin-top-8">Queues connection requests automatically on selected weekdays and times. Ensure the server remains active.</span>
+                                <button id="btn-save-schedule" class="btn btn-secondary btn-sm margin-top-12 btn-full-width" disabled>
+                                    <i data-lucide="save"></i> Save Schedule Settings
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- MESSAGE BUILDER -->
+                        <div class="glass-card panel-card" id="template-card">
+                            <div class="card-header">
+                                <div class="card-title-icon"><i data-lucide="message-square"></i></div>
+                                <h3>Connection Message</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="toggle-container">
+                                    <label class="switch">
+                                        <input type="checkbox" id="send-with-note">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span class="toggle-label">Include personalized note</span>
+                                </div>
+                                
+                                <div id="note-template-container">
+                                    <textarea id="note-template" placeholder="Hi {FirstName}, I saw your profile and would love to connect..." maxlength="300"></textarea>
+                                    <div class="char-counter"><span id="char-count">0</span> / 300 characters</div>
+                                    
+                                    <div class="tags-palette">
+                                        <span class="tag-badge" data-tag="{FirstName}">{FirstName}</span>
+                                        <span class="tag-badge" data-tag="{LastName}">{LastName}</span>
+                                        <span class="tag-badge" data-tag="{Company}">{Company}</span>
+                                        <span class="tag-badge" data-tag="{Title}">{Title}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- AUTOMATION CONTROLS -->
+                        <div class="glass-card panel-card highlight-border" id="actions-card">
+                            <div class="card-header">
+                                <div class="card-title-icon"><i data-lucide="play-circle"></i></div>
+                                <h3>Action Controls</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="selective-send-container margin-bottom-12">
+                                    <div class="selective-send-header">
+                                        <i data-lucide="list-ordered"></i>
+                                        <span>Selective Range (Optional)</span>
+                                    </div>
+                                    <div class="selective-send-inputs">
+                                        <div class="form-group flex-1">
+                                            <label for="range-start">Sr. Start</label>
+                                            <input type="number" id="range-start" min="1" placeholder="e.g. 5">
+                                        </div>
+                                        <div class="form-group flex-1">
+                                            <label for="range-end">Sr. End</label>
+                                            <input type="number" id="range-end" min="1" placeholder="e.g. 10">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="action-btn-row">
+                                    <button id="btn-start" class="btn btn-success btn-grow" disabled>
+                                        <i data-lucide="play"></i> Start Queue
+                                    </button>
+                                    <button id="btn-stop" class="btn btn-danger btn-grow" disabled>
+                                        <i data-lucide="square"></i> Pause
+                                    </button>
+                                </div>
+                                <button id="btn-sync" class="btn btn-secondary margin-top-12">
+                                    <i data-lucide="refresh-cw"></i> Sync Accepted Requests
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- WORKSPACE CONSOLE -->
+                        <div class="glass-card panel-card flex-grow-card" id="console-card">
+                            <div class="card-header">
+                                <div class="card-title-icon"><i data-lucide="terminal"></i></div>
+                                <h3>Activity Terminal</h3>
+                                <button id="btn-clear-logs" class="btn-icon-only" title="Clear Logs"><i data-lucide="trash-2"></i></button>
+                            </div>
+                            <div class="console-body" id="console-output">
+                                <div class="log-line info"><span class="log-time">[00:00:00]</span> Terminal loaded. Select an account or view logs.</div>
+                            </div>
+                        </div>
+
+                    </section>
+
+                    <!-- RIGHT PANEL: WORKSPACE METRICS & DB -->
+                    <section class="leads-dashboard">
+                        <div class="metrics-grid">
+                            <div class="glass-card metric-card">
+                                <div class="metric-icon bg-purple"><i data-lucide="users"></i></div>
+                                <div class="metric-data">
+                                    <h4 id="stat-total">0</h4>
+                                    <p>Total Profiles</p>
+                                </div>
+                            </div>
+
+                            <div class="glass-card metric-card">
+                                <div class="metric-icon bg-blue"><i data-lucide="send"></i></div>
+                                <div class="metric-data">
+                                    <h4 id="stat-sent">0</h4>
+                                    <p>Requests Sent</p>
+                                </div>
+                            </div>
+
+                            <div class="glass-card metric-card">
+                                <div class="metric-icon bg-yellow"><i data-lucide="clock"></i></div>
+                                <div class="metric-data">
+                                    <h4 id="stat-pending">0</h4>
+                                    <p>Pending</p>
+                                </div>
+                            </div>
+
+                            <div class="glass-card metric-card">
+                                <div class="metric-icon bg-green"><i data-lucide="check-circle2"></i></div>
+                                <div class="metric-data">
+                                    <h4 id="stat-connected">0</h4>
+                                    <p>Connected</p>
+                                </div>
+                            </div>
+
+                            <div class="glass-card metric-card metric-card--accent">
+                                <div class="metric-icon bg-teal"><i data-lucide="trending-up"></i></div>
+                                <div class="metric-data">
+                                    <h4 id="stat-avg-day">0<span class="metric-unit">/day</span></h4>
+                                    <p>Avg Requests/Day</p>
+                                </div>
+                            </div>
+
+                            <div class="glass-card metric-card metric-card--accent">
+                                <div class="metric-icon bg-pink"><i data-lucide="percent"></i></div>
+                                <div class="metric-data">
+                                    <h4 id="stat-accept-rate">0<span class="metric-unit">%</span></h4>
+                                    <p>Acceptance Rate</p>
+                                    <div class="accept-rate-bar-bg">
+                                        <div class="accept-rate-bar-fill" id="accept-rate-bar" style="width:0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- DUAL PROGRESS BAR QUOTAS -->
+                        <div class="quota-container">
+                            <div class="glass-card progress-card flex-1">
+                                <div class="progress-info">
+                                    <div class="progress-label">
+                                        <i data-lucide="shield-alert"></i> Safe Daily Quota
+                                    </div>
+                                    <div class="progress-stats">
+                                        <span id="quota-daily-current">0</span> / <span id="quota-daily-max">25</span> requests
+                                    </div>
+                                </div>
+                                <div class="progress-bar-bg">
+                                    <div class="progress-bar-fill" id="quota-daily-bar" style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <div class="glass-card progress-card flex-1">
+                                <div class="progress-info">
+                                    <div class="progress-label">
+                                        <i data-lucide="gauge"></i> Safe Weekly Quota
+                                    </div>
+                                    <div class="progress-stats">
+                                        <span id="quota-weekly-current">0</span> / <span id="quota-weekly-max">150</span> requests
+                                    </div>
+                                </div>
+                                <div class="progress-bar-bg">
+                                    <div class="progress-bar-fill" id="quota-weekly-bar" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- DB TABLE -->
+                        <div class="glass-card table-card">
+                            <div class="table-header-bar">
+                                <div class="table-header-left">
+                                    <h3>Prospect Database</h3>
+                                    <span class="count-tag" id="contacts-count">0 contacts</span>
+                                </div>
+                                <div class="table-header-right">
+                                    <div class="search-box">
+                                        <i data-lucide="search"></i>
+                                        <input type="text" id="table-search" placeholder="Search by name, company, title...">
+                                    </div>
+                                    
+                                    <div class="filter-dropdown-container">
+                                        <select id="status-filter" class="filter-select">
+                                            <option value="all">All Statuses</option>
+                                            <option value="Not Started">Not Started</option>
+                                            <option value="Pending">Pending</option>
+                                            <option value="Connected">Connected</option>
+                                            <option value="Failed">Failed</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="filter-dropdown-container">
+                                        <select id="date-filter" class="filter-select">
+                                            <option value="all">All Time</option>
+                                            <option value="today">Today</option>
+                                            <option value="yesterday">Yesterday</option>
+                                            <option value="week">Past Week</option>
+                                            <option value="month">Past Month</option>
+                                            <option value="custom">Custom Range</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <button id="btn-reset-contacts" class="btn btn-secondary-outline btn-sm" title="Reset contacts status to Not Started">
+                                        <i data-lucide="rotate-ccw"></i> Reset
+                                    </button>
+                                    
+                                    <button id="btn-clear-db" class="btn btn-danger-outline btn-sm" title="Clear entire database">
+                                        <i data-lucide="trash-2"></i> Clear DB
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- CUSTOM DATE RANGE PANEL -->
+                            <div id="custom-date-container" class="custom-date-panel" style="display: none;">
+                                <div class="custom-date-inputs">
+                                    <div class="custom-date-group">
+                                        <label for="custom-start-date">Start Date</label>
+                                        <input type="date" id="custom-start-date">
+                                    </div>
+                                    <div class="custom-date-group">
+                                        <label for="custom-end-date">End Date</label>
+                                        <input type="date" id="custom-end-date">
+                                    </div>
+                                </div>
+                                <div class="custom-date-actions">
+                                    <button id="btn-apply-date" class="btn btn-primary btn-sm">Apply</button>
+                                    <button id="btn-clear-date" class="btn btn-secondary-outline btn-sm">Clear</button>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table id="contacts-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 60px; text-align: center;">#</th>
+                                            <th>Name / Title</th>
+                                            <th>Company</th>
+                                            <th>Profile URL</th>
+                                            <th>Email / Phone</th>
+                                            <th>Status</th>
+                                            <th>Date Sent / Sync</th>
+                                            <th style="width: 80px; text-align: center;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="table-body">
+                                        <!-- Dynamically generated leads rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </section>
+                </main>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- REGISTER ACCOUNT MODAL -->
+    <div id="add-account-modal" class="modal-overlay" style="display: none;">
+        <div class="glass-card modal-card">
+            <div class="modal-header">
+                <h3>Register New LinkedIn Account</h3>
+                <button id="btn-close-modal" class="btn-icon-only"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="acc-id-input">Unique ID (lowercase, alphanumeric, e.g. "acct_john")</label>
+                    <input type="text" id="acc-id-input" placeholder="e.g. sales_manager_1">
+                </div>
+                <div class="form-group margin-top-12">
+                    <label for="acc-name-input">Display Name (e.g. "John Doe - Sales")</label>
+                    <input type="text" id="acc-name-input" placeholder="e.g. John Doe (Tech Lead)">
+                </div>
+
+                <div class="modal-section-title margin-top-16">Proxy Routing Configuration (Optional)</div>
+                <p class="modal-section-desc">Assigning a dedicated proxy to each account isolates its traffic and minimizes ban risks.</p>
+                
+                <div class="form-group margin-top-8">
+                    <label for="acc-proxy-server">Proxy Server IP (e.g., http://103.45.67.89:8080)</label>
+                    <input type="text" id="acc-proxy-server" placeholder="http://ip:port or socks5://ip:port">
+                </div>
+                <div class="form-row margin-top-8">
+                    <div class="form-group flex-1">
+                        <label for="acc-proxy-user">Proxy Username</label>
+                        <input type="text" id="acc-proxy-user" placeholder="Optional username">
+                    </div>
+                    <div class="form-group flex-1">
+                        <label for="acc-proxy-pass">Proxy Password</label>
+                        <input type="password" id="acc-proxy-pass" placeholder="Optional password">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer margin-top-20">
+                <button id="btn-cancel-modal" class="btn btn-secondary-outline">Cancel</button>
+                <button id="btn-save-account" class="btn btn-primary btn-glow">Register Profile</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Status Confirmation Modal -->
+    <div class="modal-overlay" id="reset-modal-overlay" style="display:none;">
+        <div class="modal-card" style="max-width: 440px;">
+            <div class="modal-header">
+                <h3 style="display:flex; align-items:center; gap:10px;">
+                    <i data-lucide="refresh-cw" style="width:20px;height:20px;color:var(--status-warning);"></i>
+                    Reset Prospect Statuses
+                </h3>
+            </div>
+            <div class="modal-body" style="padding: 20px 0;">
+                <p style="color:var(--text-secondary); margin-bottom:18px; line-height:1.6;">
+                    Choose what to reset back to <strong style="color:var(--text-primary);">"Not Started"</strong>:
+                </p>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <button id="btn-reset-failed-only" class="btn btn-secondary btn-full-width" style="justify-content:flex-start; gap:12px; padding:14px 18px; text-align:left;">
+                        <i data-lucide="alert-triangle" style="width:18px;height:18px;color:var(--status-danger);flex-shrink:0;"></i>
+                        <div>
+                            <div style="font-weight:700; font-size:0.9rem;">Reset Failed Only</div>
+                            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Only "Failed" contacts will be reset — all others unchanged</div>
+                        </div>
+                    </button>
+                    <button id="btn-reset-pending-only" class="btn btn-secondary btn-full-width" style="justify-content:flex-start; gap:12px; padding:14px 18px; text-align:left;">
+                        <i data-lucide="clock" style="width:18px;height:18px;color:var(--status-warning);flex-shrink:0;"></i>
+                        <div>
+                            <div style="font-weight:700; font-size:0.9rem;">Reset Pending Only</div>
+                            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Only "Pending" contacts will be reset — all others unchanged</div>
+                        </div>
+                    </button>
+                    <button id="btn-reset-all-confirm" class="btn btn-danger-outline btn-full-width" style="justify-content:flex-start; gap:12px; padding:14px 18px; text-align:left;">
+                        <i data-lucide="refresh-cw" style="width:18px;height:18px;flex-shrink:0;"></i>
+                        <div>
+                            <div style="font-weight:700; font-size:0.9rem;">Reset ALL Contacts</div>
+                            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Every contact goes back to "Not Started" — clears all history</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer margin-top-8">
+                <button id="btn-reset-modal-cancel" class="btn btn-secondary-outline btn-full-width">Cancel — Do Nothing</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Frontend logic -->
+    <script src="app.js"></script>
+</body>
+</html>
