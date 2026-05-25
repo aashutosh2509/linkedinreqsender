@@ -48,5 +48,43 @@
         "status": "Idle",
         "current_action": "Idle",
         "progress_percent": 0
+    },
+    {
+        "id": "profile_3_3601",
+        "name": "Profile 3",
+        "li_username": null,
+        "li_password": null,
+        "proxy": null,
+        "config": {
+            "note_template": "Hi {FirstName}, let's connect!",
+            "send_with_note": false,
+            "delay_min": 30,
+            "delay_max": 70,
+            "daily_limit": 25,
+            "weekly_limit": 150,
+            "schedule": null
+        },
+        "status": "Idle",
+        "current_action": "Idle",
+        "progress_percent": 0
+    },
+    {
+        "id": "profile_3_4030",
+        "name": "Profile 3",
+        "li_username": null,
+        "li_password": null,
+        "proxy": null,
+        "config": {
+            "note_template": "Hi {FirstName}, let's connect!",
+            "send_with_note": false,
+            "delay_min": 30,
+            "delay_max": 70,
+            "daily_limit": 25,
+            "weekly_limit": 150,
+            "schedule": null
+        },
+        "status": "Idle",
+        "current_action": "Idle",
+        "progress_percent": 0
     }
 ]
