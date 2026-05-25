@@ -131,7 +131,7 @@ body {
     margin: 0 auto;
     padding: 24px;
     display: grid;
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 300px minmax(0, 1fr);
     gap: 24px;
     min-height: 100vh;
 }
@@ -338,7 +338,7 @@ body {
    ========================================================================== */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 340px 1fr;
+    grid-template-columns: 340px minmax(0, 1fr);
     gap: 24px;
     align-items: start;
 }
@@ -1149,6 +1149,7 @@ textarea:focus {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-wrap: wrap;
 }
 
 .search-box {
@@ -1196,6 +1197,7 @@ textarea:focus {
     overflow-x: auto;
     max-height: 480px;
     position: relative;
+    width: 100%;
 }
 
 table {
@@ -1369,8 +1371,17 @@ td {
    RESPONSIVE DESIGN ADAPTATIONS
    ========================================================================== */
 @media (max-width: 1400px) {
+    .app-container {
+        grid-template-columns: 250px minmax(0, 1fr);
+        padding: 16px;
+        gap: 16px;
+    }
+    .sidebar-navigation {
+        padding: 16px;
+    }
     .dashboard-grid {
-        grid-template-columns: 300px 1fr;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 16px;
     }
 }
 
