@@ -337,7 +337,11 @@ def check_account_login():
         
     acc_state = get_account_state(acc_id)
     if acc_state.is_running:
-        return err_response("Cannot check login status while the account is busy.")
+        return jsonify({
+            "status": "success",
+            "logged_in": False,
+            "message": "Account is currently busy (another automation or browser task is active)."
+        })
         
     acc_state.add_log("Testing login session status headlessly...", "info")
     logged_in = automation.test_login_session(acc_id)
@@ -489,7 +493,6 @@ def reset_contacts():
     acc_state.add_log(f"Reset {reset_count} contact(s) back to 'Not Started' ({scope} scope).", "info")
     return jsonify({"status": "success", "message": f"Successfully reset {reset_count} contacts.", "reset_count": reset_count})
 
-# API - Launch browser for manual login
 @app.route("/api/launch-login", methods=["POST"])
 def launch_login():
     req_data = request.json or {}
@@ -498,7 +501,10 @@ def launch_login():
     acc_state = get_account_state(acc_id)
     
     if acc_state.is_running:
-        return err_response("Automation is currently running. Please wait or stop it first.")
+        return jsonify({
+            "status": "success",
+            "message": "A browser session or headless auto-login is already active or in progress for this account. Please check the logs below."
+        })
     
     try:
         update_account_status_in_registry(acc_id, status="Login Setup", current_action="Awaiting manual login")
