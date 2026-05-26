@@ -5,8 +5,8 @@ set -o errexit
 pip install -r requirements.txt
 
 # Set Playwright path to the project directory so Render copies it to the runtime environment
-export PLAYWRIGHT_BROWSERS_PATH=0
+export PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/pw-browsers
 
 # Install Chromium for Playwright
-playwright install chromium
-playwright install-deps chromium
+python -m playwright install chromium
+python -m playwright install-deps chromium

@@ -1,5 +1,5 @@
 import os
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/opt/render/project/src/pw-browsers"
 import json
 import re
 from flask import Flask, request, jsonify, send_from_directory
