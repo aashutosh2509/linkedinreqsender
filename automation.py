@@ -366,23 +366,6 @@ def open_linkedin_for_login(account_id="default"):
         update_account_status_in_registry(account_id, status="Login Setup", current_action="Opening login browser...")
         
         try:
-            # Check if running in a Headless Cloud Server (like Linux / Google Colab)
-            import platform
-            if platform.system().lower() == "linux":
-                acc_state.add_log("==========================================================================================", "warning")
-                acc_state.add_log("★ CLOUD SERVER ENVIRONMENT DETECTED (Linux/Google Colab) ★", "warning")
-                acc_state.add_log("Directly launching a physical Chrome desktop window is only supported when running locally on Windows/Mac.", "info")
-                acc_state.add_log("To connect this new account profile inside the cloud, please choose one of these two 100% free methods:", "success")
-                acc_state.add_log("------------------------------------------------------------------------------------------", "info")
-                acc_state.add_log("👉 METHOD 1 (Recommended): Run the app locally on your PC, click 'Launch Browser', log in to LinkedIn, then upload your local 'linkedin_user_data/profiles' folder to your Google Drive 'LinkConnect' folder.", "info")
-                acc_state.add_log("👉 METHOD 2: Enter your LinkedIn Email & Password in the 'LinkedIn Credentials' section under Safety Settings. The cloud bot will automatically perform a secure headless login next time you click 'Start'!", "info")
-                acc_state.add_log("==========================================================================================", "warning")
-                
-                # Gracefully exit and reset status to Idle so it does not freeze
-                acc_state.update_status(action="Idle")
-                update_account_status_in_registry(account_id, status="Idle", current_action="Idle", progress_percent=0)
-                acc_state.stop_running()
-                return
 
             # Fetch proxy if configured
             proxy_cfg = None
