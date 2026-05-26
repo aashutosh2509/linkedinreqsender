@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+export PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.playwright
+
 # Setup directories on the persistent disk
 mkdir -p /data/linkedin_user_data
 mkdir -p /data/accounts_db
