@@ -114,7 +114,7 @@ const customEndDateInput = document.getElementById("custom-end-date");
 const btnApplyDate = document.getElementById("btn-apply-date");
 const btnClearDate = document.getElementById("btn-clear-date");
 const btnResetContacts = document.getElementById("btn-reset-contacts");
-const btnClearDb = document.getElementById("btn-clear-db");
+const btnAdminClearDb = document.getElementById("btn-admin-clear-db");
 const tableBody = document.getElementById("table-body");
 
 // Add Account Modal UI
@@ -227,7 +227,7 @@ function setupEventListeners() {
     
     // Database modifications
     btnResetContacts.addEventListener("click", resetProspectsStatus);
-    btnClearDb.addEventListener("click", clearWorkspaceDatabase);
+    if (btnAdminClearDb) btnAdminClearDb.addEventListener("click", adminClearDatabases);
     
     // Prospect search & filter events
     tableSearchInput.addEventListener("input", renderWorkspaceTable);
@@ -1257,7 +1257,6 @@ async function fetchWorkspaceState() {
             btnStop.disabled = false;
             btnLaunchLogin.disabled = true;
             btnSync.disabled = true;
-            btnClearDb.disabled = true;
             btnResetContacts.disabled = true;
             excelDropZone.style.pointerEvents = "none";
             excelDropZone.style.opacity = "0.5";
@@ -1268,7 +1267,6 @@ async function fetchWorkspaceState() {
             btnStop.disabled = true;
             btnLaunchLogin.disabled = false;
             btnSync.disabled = false;
-            btnClearDb.disabled = false;
             btnResetContacts.disabled = false;
             excelDropZone.style.pointerEvents = "auto";
             excelDropZone.style.opacity = "1";
@@ -1917,26 +1915,50 @@ function setupResetModal() {
     });
 }
 
-async function clearWorkspaceDatabase() {
-    if (currentAccountId === "admin") return;
-    if (!confirm("Are you sure you want to clear ALL prospect entries? This is permanent.")) return;
+async function adminClearDatabases() {
+    const pass = prompt("Enter Administrator Password to delete databases:");
+    if (pass !== "admin123") {
+        alert("Permission Denied.");
+        return;
+    }
     
-    appendLogToConsole("Clearing prospect database...", "warning");
+    if (selectedAccountIdsForBulk.size === 0) {
+        alert("Please select at least one account to delete its database.");
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to permanently delete databases for ${selectedAccountIdsForBulk.size} selected account(s)?`)) return;
+    
+    const btn = document.getElementById("btn-admin-clear-db");
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = `<i data-lucide="loader" class="animate-spin" style="width:14px; height:14px; margin-right:6px; display:inline-block; vertical-align:middle;"></i> Deleting...`;
+    lucide.createIcons();
+
     try {
-        const response = await fetch(`${API_BASE}/contacts/clear`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ account_id: currentAccountId })
-        });
-        const res = await response.json();
-        if (res.status === "success") {
-            appendLogToConsole("Database successfully cleared.", "warning");
-            await fetchWorkspaceContacts();
+        for (const accountId of selectedAccountIdsForBulk) {
+            await fetch(`${API_BASE}/contacts/clear`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ account_id: accountId })
+            });
         }
+        alert("Databases successfully deleted.");
+        // Uncheck all and refresh
+        selectedAccountIdsForBulk.clear();
+        const selectAllCheckbox = document.getElementById("checkbox-select-all-accounts");
+        if (selectAllCheckbox) selectAllCheckbox.checked = false;
+        await refreshAccountsRegistry();
+        renderAdminDashboardView();
     } catch (e) {
-        appendLogToConsole("Network error clearing database.", "error");
+        alert("Network error while deleting databases.");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        lucide.createIcons();
     }
 }
+
 
 async function handleProspectTableClick(e) {
     const deleteBtn = e.target.closest(".delete-prospect-btn");
