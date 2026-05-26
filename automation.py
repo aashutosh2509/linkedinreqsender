@@ -367,7 +367,6 @@ def open_linkedin_for_login(account_id="default"):
         update_account_status_in_registry(account_id, status="Login Setup", current_action="Opening login browser...")
         
         try:
-
             # Fetch proxy if configured
             proxy_cfg = None
             accounts = load_accounts_registry()
@@ -375,7 +374,27 @@ def open_linkedin_for_login(account_id="default"):
                 if acc.get("id") == account_id:
                     proxy_cfg = acc.get("proxy")
                     break
-            
+                    
+            import platform
+            if platform.system().lower() == "linux":
+                acc_state.add_log("Cloud environment detected. Switching 'Launch Browser' to Headless Auto-Login...", "info")
+                playwright, context = launch_browser(account_id, headed=False, proxy_config=proxy_cfg)
+                try:
+                    page = context.new_page()
+                    success = perform_auto_login(page, account_id, acc_state)
+                    if success:
+                        acc_state.add_log("Headless Auto-Login completed.", "success")
+                    else:
+                        acc_state.add_log("Headless Auto-Login failed. Please ensure credentials are saved in settings.", "error")
+                except Exception as ex:
+                    acc_state.add_log(f"Headless login exception: {str(ex)}", "error")
+                finally:
+                    try: context.close()
+                    except: pass
+                    try: playwright.stop()
+                    except: pass
+                return
+
             chrome_path = find_chrome_executable()
             if not chrome_path:
                 raise Exception("Google Chrome executable not found on standard paths on Windows. Please install Google Chrome.")
