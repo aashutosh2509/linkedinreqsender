@@ -1,4 +1,5 @@
 import os
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
 import json
 import time
 import random
