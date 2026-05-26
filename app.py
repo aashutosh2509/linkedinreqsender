@@ -500,8 +500,33 @@ def launch_login():
     if acc_state.is_running:
         return err_response("Automation is currently running. Please wait or stop it first.")
     
-    open_linkedin_for_login(acc_id)
-    return jsonify({"status": "success", "message": f"Browser launched for login to account '{acc_id}'. Please check taskbar."})
+    try:
+        update_account_status_in_registry(acc_id, status="Login Setup", current_action="Awaiting manual login")
+        open_linkedin_for_login(acc_id)
+        return jsonify({"status": "success", "message": f"Browser launched for login to account '{acc_id}'. Please login to LinkedIn, then click 'Check Login Status'."})
+    except Exception as e:
+        update_account_status_in_registry(acc_id, status="Idle", current_action="Idle")
+        return err_response(f"Failed to launch browser: {str(e)}")
+
+# API - Submit 2FA / Verification code
+@app.route("/api/accounts/submit-2fa", methods=["POST"])
+def submit_2fa_code():
+    req_data = request.json or {}
+    acc_id = req_data.get("account_id", "").strip()
+    code = req_data.get("code", "").strip()
+    
+    if not acc_id:
+        return err_response("Account ID is required.")
+    if not code:
+        return err_response("Verification code is required.")
+        
+    acc_state = get_account_state(acc_id)
+    if not acc_state.awaiting_2fa:
+        return err_response("This account is not currently waiting for a 2FA/Verification code.")
+        
+    acc_state.two_factor_code = code
+    acc_state.add_log(f"User entered verification code: {code}. Transmitting to Playwright...", "info")
+    return jsonify({"status": "success", "message": "Verification code transmitted."})
 
 # API - Start connection automation
 @app.route("/api/start", methods=["POST"])

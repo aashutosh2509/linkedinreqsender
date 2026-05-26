@@ -792,6 +792,17 @@ textarea:focus {
     transform: translateY(-1px);
 }
 
+.btn-warning {
+    background: var(--status-warning);
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(217, 119, 6, 0.2);
+}
+
+.btn-warning:hover {
+    box-shadow: 0 6px 20px rgba(217, 119, 6, 0.35);
+    transform: translateY(-1px);
+}
+
 .btn-secondary {
     background: rgba(15, 23, 42, 0.03);
     border: 1px solid var(--border-color);

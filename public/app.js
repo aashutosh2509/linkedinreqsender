@@ -48,6 +48,13 @@ const btnDeleteAccountWorkspace = document.getElementById("btn-delete-account-wo
 const excelDropZone = document.getElementById("excel-drop-zone");
 const excelFileInput = document.getElementById("excel-file-input");
 
+// 2FA Controls
+const card2FA = document.getElementById("two-factor-verification-card");
+const input2FACode = document.getElementById("input-2fa-code");
+const btnSubmit2FA = document.getElementById("btn-submit-2fa");
+const img2FA = document.getElementById("two-factor-screenshot");
+const containerImg2FA = document.getElementById("two-factor-screenshot-container");
+
 // Quick Add Single Profile
 const quickUrlInput = document.getElementById("quick-url-input");
 const quickNameInput = document.getElementById("quick-name-input");
@@ -160,6 +167,7 @@ function setupEventListeners() {
     // Browser Login Trigger
     btnLaunchLogin.addEventListener("click", launchLoginBrowser);
     btnCheckLogin.addEventListener("click", checkWorkspaceLoginSession);
+    btnSubmit2FA.addEventListener("click", submit2FACode);
     btnDeleteAccountWorkspace.addEventListener("click", () => deleteAccountProfile(currentAccountId));
     
     // Quick add contact
@@ -1331,6 +1339,15 @@ async function fetchWorkspaceState() {
             excelDropZone.style.opacity = "1";
         }
         
+        // Update 2FA Verification Card based on state
+        if (state.awaiting_2fa) {
+            card2FA.style.display = "block";
+            img2FA.src = `/checkpoint_${currentAccountId}.png?t=${new Date().getTime()}`;
+            containerImg2FA.style.display = "block";
+        } else {
+            card2FA.style.display = "none";
+        }
+        
         // Refresh logging stream console
         updateLogsPanel(state.logs);
     } catch (e) {
@@ -1498,6 +1515,37 @@ async function checkWorkspaceLoginSession() {
         btnCheckLogin.disabled = false;
         btnCheckLogin.innerHTML = originalText;
         lucide.createIcons();
+    }
+}
+
+async function submit2FACode() {
+    const code = input2FACode.value.trim();
+    if (!code) {
+        alert("Please enter the verification code first.");
+        return;
+    }
+    
+    btnSubmit2FA.disabled = true;
+    appendLogToConsole(`Submitting 2FA verification code: ${code}...`, "info");
+    try {
+        const response = await fetch(`${API_BASE}/accounts/submit-2fa`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ account_id: currentAccountId, code: code })
+        });
+        const res = await response.json();
+        btnSubmit2FA.disabled = false;
+        
+        if (res.status === "success") {
+            appendLogToConsole("Verification code submitted successfully! Waiting for LinkedIn redirect...", "success");
+            input2FACode.value = "";
+        } else {
+            appendLogToConsole(`Verification code submission failed: ${res.error}`, "error");
+            alert(`Error: ${res.error}`);
+        }
+    } catch (e) {
+        appendLogToConsole("Network connection error submitting 2FA code.", "error");
+        btnSubmit2FA.disabled = false;
     }
 }
 

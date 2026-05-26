@@ -21,6 +21,8 @@ class AutomationState:
         self.current_action = "Idle"
         self.progress_percent = 0
         self.stop_requested = False
+        self.awaiting_2fa = False
+        self.two_factor_code = None
         self._lock = threading.Lock()
         
     def start_running(self):
@@ -57,7 +59,8 @@ class AutomationState:
                 "is_running": self.is_running,
                 "current_action": self.current_action,
                 "progress_percent": self.progress_percent,
-                "logs": self.logs
+                "logs": self.logs,
+                "awaiting_2fa": self.awaiting_2fa
             }
 
 # Multi-account state management
@@ -186,31 +189,35 @@ def resolve_template(template, contact):
 
 # Persistent browser launcher with proxy routing support
 def launch_browser(account_id="default", headed=True, proxy_config=None):
-    """
-    Launches browser with persistent user data context so session persists, with optional proxy.
-    """
     acc_state = get_account_state(account_id)
-    acc_state.add_log(f"Launching persistent browser for '{account_id}'...", "info")
-    playwright = sync_playwright().start()
+    
+    import platform
+    if platform.system().lower() == "linux":
+        acc_state.add_log("Linux environment detected. Forcing browser to launch in headless mode.", "info")
+        headed = False
+
+    acc_state.add_log(f"Launching persistent browser for '{account_id}' ({'headed' if headed else 'headless'})...", "info")
+    pw = sync_playwright().start()
     
     user_data_dir = os.path.join(BASE_USER_DATA_DIR, account_id)
     os.makedirs(user_data_dir, exist_ok=True)
     
     pw_proxy = None
-    if proxy_config and proxy_config.get("server"):
-        srv = proxy_config["server"].strip()
-        if srv:
-            pw_proxy = {
-                "server": srv
-            }
-            if proxy_config.get("username"):
-                pw_proxy["username"] = proxy_config["username"].strip()
-            if proxy_config.get("password"):
-                pw_proxy["password"] = proxy_config["password"].strip()
-            acc_state.add_log(f"Routing browser through proxy server: {srv}", "info")
+    if proxy_config:
+        pw_proxy = {
+            "server": proxy_config["server"]
+        }
+        if proxy_config.get("username"):
+            pw_proxy["username"] = proxy_config["username"]
+            pw_proxy["password"] = proxy_config["password"]
             
-    context = playwright.chromium.launch_persistent_context(
+    executable_path = None
+    if platform.system().lower() != "linux":
+        executable_path = find_chrome_executable()
+        
+    context = pw.chromium.launch_persistent_context(
         user_data_dir=user_data_dir,
+        executable_path=executable_path,
         headless=not headed,
         viewport={"width": 1280, "height": 800},
         proxy=pw_proxy,
@@ -219,9 +226,8 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
             "--no-sandbox"
         ]
     )
-    
     context.set_default_timeout(20000)
-    return playwright, context
+    return pw, context
 
 def check_login_status(page):
     """
@@ -287,6 +293,7 @@ def test_login_session(account_id="default"):
 def perform_auto_login(page, account_id, acc_state):
     """
     Checks if credentials exist and fills them automatically on the login page.
+    Handles verification challenges (2FA) interactively when running headlessly.
     """
     # Fetch credentials
     li_username = None
@@ -323,11 +330,101 @@ def perform_auto_login(page, account_id, acc_state):
         submit_btn.click()
         
         acc_state.add_log("Submitted login credentials automatically.", "success")
-        time.sleep(5) # Wait to let the redirect/session settle or security check render
+        time.sleep(6) # Wait to let the redirect/session settle or security check render
         
-        # If security check/2FA is shown, tell the user in logs
-        if "checkpoint" in page.url or "security" in page.url or page.locator("input[placeholder*='code']").is_visible():
-            acc_state.add_log("Security check or Verification Code prompted by LinkedIn. Please complete it manually in the opened browser window.", "warning")
+        # Detect security verification challenge (2FA)
+        is_checkpoint = "checkpoint" in page.url or "security" in page.url or page.locator("input[placeholder*='code']").is_visible() or page.locator("input#input-code").is_visible()
+        
+        if is_checkpoint:
+            acc_state.add_log("LinkedIn Security Checkpoint / 2FA detected!", "warning")
+            
+            # Save visual challenge screenshot for the user
+            try:
+                public_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
+                os.makedirs(public_dir, exist_ok=True)
+                screenshot_path = os.path.join(public_dir, f"checkpoint_{account_id}.png")
+                page.screenshot(path=screenshot_path)
+                acc_state.add_log(f"Saved visual challenge screenshot to dashboard directory.", "info")
+            except Exception as e:
+                acc_state.add_log(f"Failed to capture visual challenge screenshot: {str(e)}", "warning")
+                
+            acc_state.awaiting_2fa = True
+            acc_state.two_factor_code = None
+            update_account_status_in_registry(account_id, status="Awaiting 2FA", current_action="Enter 2FA/Verification Code")
+            
+            acc_state.add_log("Awaiting 2FA Verification Code from your dashboard Settings panel (Timeout: 3 minutes)...", "warning")
+            
+            # Poll state waiting for the user to submit their code from the frontend
+            wait_timeout = 180
+            code_received = False
+            for i in range(wait_timeout):
+                if acc_state.stop_requested:
+                    acc_state.add_log("Login setup stopped by user request.", "warning")
+                    break
+                if acc_state.two_factor_code:
+                    code_received = True
+                    break
+                time.sleep(1)
+                if i % 15 == 0 and i > 0:
+                    acc_state.add_log(f"Still waiting for verification code... ({wait_timeout - i}s left)", "info")
+                    
+            if code_received:
+                code = acc_state.two_factor_code
+                acc_state.add_log(f"Verification code received: {code}. Injecting into form...", "success")
+                
+                # Fill the OTP field
+                code_filled = False
+                otp_selectors = ["input#input-code", "input[name='pin']", "input[placeholder*='code']", "input[autocomplete='one-time-code']", "input[type='text']", "input[type='number']"]
+                for selector in otp_selectors:
+                    try:
+                        el = page.locator(selector).first
+                        if el.is_visible():
+                            el.fill(code)
+                            code_filled = True
+                            acc_state.add_log(f"Filled code using selector: '{selector}'", "info")
+                            break
+                    except:
+                        continue
+                        
+                if not code_filled:
+                    try:
+                        page.keyboard.type(code)
+                        code_filled = True
+                        acc_state.add_log("Filled code using keyboard typing emulation.", "info")
+                    except Exception as e:
+                        acc_state.add_log(f"Could not fill code: {str(e)}", "error")
+                        
+                if code_filled:
+                    time.sleep(random.uniform(0.6, 1.2))
+                    # Submit the OTP code
+                    submit_clicked = False
+                    btn_selectors = ["button#submit-code", "button[type='submit']", "button:has-text('Submit')", "button:has-text('Verify')", "button:has-text('Next')"]
+                    for b_sel in btn_selectors:
+                        try:
+                            btn = page.locator(b_sel).first
+                            if btn.is_visible():
+                                btn.click()
+                                submit_clicked = True
+                                acc_state.add_log(f"Clicked verify button using selector: '{b_sel}'", "info")
+                                break
+                        except:
+                            continue
+                            
+                    if not submit_clicked:
+                        try:
+                            page.keyboard.press("Enter")
+                            submit_clicked = True
+                            acc_state.add_log("Submitted form using 'Enter' key emulation.", "info")
+                        except:
+                            pass
+                            
+                    acc_state.add_log("Verification submitted! Awaiting LinkedIn redirect...", "info")
+                    time.sleep(6)
+            else:
+                acc_state.add_log("Timed out waiting for LinkedIn 2FA verification code.", "error")
+                
+            acc_state.awaiting_2fa = False
+            acc_state.two_factor_code = None
             
         return True
     except Exception as ex:
@@ -345,7 +442,11 @@ def find_chrome_executable():
         os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
         os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe"),
         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        os.path.expandvars(r"%ProgramFiles%\Microsoft\Edge\Application\msedge.exe"),
+        os.path.expandvars(r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe"),
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
     ]
     for p in paths:
         if os.path.exists(p):
@@ -1078,7 +1179,7 @@ def run_automation_worker_sync(account_id="default", config=None):
             
         pending_contacts = [c for c in db_data_slice if c.get("status", "Not Started") == "Not Started"]
         if not pending_contacts:
-            acc_state.add_log("No profiles found with 'Not Started' status in the specified range.", "warning")
+            acc_state.add_log("No profiles found with 'Not Started' status in the specified range. Please add new contacts, clear the Selective Range inputs, or use the Reset button.", "warning")
             return
             
         acc_state.add_log(f"Found {len(pending_contacts)} profiles to process.", "info")
