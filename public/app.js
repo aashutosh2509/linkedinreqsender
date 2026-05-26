@@ -14,6 +14,7 @@ let currentFilteredContacts = [];
 let isSystemRunning = false;
 let pollingInterval = null;
 let selectedAccountIdsForBulk = new Set();
+let hasAdminAccess = false; // Added for password protection
 let accountsCustomOrder = null; // Stores shuffled/custom order of account IDs
 
 // UI Elements: Navigation Sidebar
@@ -382,10 +383,68 @@ async function pollBackendRoutines() {
     }
 }
 
+// --- Custom Password Prompt ---
+function promptPassword(titleText, labelText) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById("password-modal");
+        const title = document.getElementById("password-modal-title");
+        const label = document.getElementById("password-modal-label");
+        const input = document.getElementById("custom-password-input");
+        const toggleBtn = document.getElementById("btn-toggle-password");
+        const btnCancel = document.getElementById("btn-password-cancel");
+        const btnSubmit = document.getElementById("btn-password-submit");
+
+        title.textContent = titleText || "Authentication Required";
+        label.textContent = labelText || "Enter Password";
+        input.value = "";
+        input.type = "password";
+        toggleBtn.innerHTML = '<i data-lucide="eye"></i>';
+        lucide.createIcons();
+        modal.style.display = "flex";
+        input.focus();
+
+        const cleanup = () => {
+            modal.style.display = "none";
+            btnCancel.removeEventListener("click", onCancel);
+            btnSubmit.removeEventListener("click", onSubmit);
+            input.removeEventListener("keydown", onKeyDown);
+            toggleBtn.removeEventListener("click", onToggle);
+        };
+
+        const onCancel = () => { cleanup(); resolve(null); };
+        const onSubmit = () => { cleanup(); resolve(input.value); };
+        const onKeyDown = (e) => { if (e.key === "Enter") onSubmit(); if (e.key === "Escape") onCancel(); };
+        const onToggle = () => {
+            if (input.type === "password") {
+                input.type = "text";
+                toggleBtn.innerHTML = '<i data-lucide="eye-off"></i>';
+            } else {
+                input.type = "password";
+                toggleBtn.innerHTML = '<i data-lucide="eye"></i>';
+            }
+            lucide.createIcons();
+        };
+
+        btnCancel.addEventListener("click", onCancel);
+        btnSubmit.addEventListener("click", onSubmit);
+        input.addEventListener("keydown", onKeyDown);
+        toggleBtn.addEventListener("click", onToggle);
+    });
+}
+
 // ==========================================================================
 // WORKSPACE NAVIGATION SWITCHER
 // ==========================================================================
 async function switchWorkspace(accountId) {
+    if (!hasAdminAccess) {
+        const pass = await promptPassword("Access Restricted", "Enter Administrator Password to access dashboard:");
+        if (pass === "nbent123") {
+            hasAdminAccess = true;
+        } else {
+            alert("Permission Denied.");
+            return;
+        }
+    }
     currentAccountId = accountId;
     
     // Clear console panel logs when changing views
@@ -1916,7 +1975,7 @@ function setupResetModal() {
 }
 
 async function adminClearDatabases() {
-    const pass = prompt("Enter Administrator Password to delete databases:");
+    const pass = await promptPassword("Delete Databases", "Enter Administrator Password to delete databases:");
     if (pass !== "admin123") {
         alert("Permission Denied.");
         return;
