@@ -908,11 +908,9 @@ function renderAdminDashboardView() {
                     <button class="btn btn-secondary btn-sm workspace-swapper-btn" data-id="${acc.id}">
                         Open
                     </button>
-                    ${acc.id !== 'default' ? `
                     <button class="btn btn-danger-outline btn-sm delete-account-btn" data-id="${acc.id}" title="Delete Account Profile" style="margin-left: 4px; padding: 4px 8px;">
                         <i data-lucide="trash-2" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle;"></i>
                     </button>
-                    ` : ''}
                 </td>
             </tr>
         `;
