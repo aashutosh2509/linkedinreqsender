@@ -534,6 +534,51 @@ def submit_2fa_code():
     acc_state.add_log(f"User entered verification code: {code}. Transmitting to Playwright...", "info")
     return jsonify({"status": "success", "message": "Verification code transmitted."})
 
+# API - Diagnose Playwright installation in production
+@app.route("/api/diagnose-pw", methods=["GET"])
+def diagnose_pw():
+    import sys
+    import subprocess
+    
+    pw_version = "Unknown"
+    try:
+        import playwright
+        pw_version = playwright.__version__
+    except Exception as e:
+        pw_version = f"Error importing: {str(e)}"
+        
+    pw_browsers_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "Not Set")
+    
+    path_exists = os.path.exists(pw_browsers_path)
+    contents = []
+    if path_exists:
+        try:
+            for root, dirs, files in os.walk(pw_browsers_path):
+                # Only go 3 levels deep to avoid massive output
+                depth = root.replace(pw_browsers_path, "").count(os.sep)
+                if depth < 3:
+                    contents.append(f"{root} (dirs: {dirs}, files: {files[:10]})")
+        except Exception as e:
+            contents.append(f"Error listing: {str(e)}")
+            
+    # Also check what's in /opt/render/project/src/
+    src_contents = []
+    try:
+        src_path = "/opt/render/project/src"
+        if os.path.exists(src_path):
+            src_contents = os.listdir(src_path)
+    except Exception as e:
+        src_contents = [f"Error listing /src: {str(e)}"]
+
+    return jsonify({
+        "python_version": sys.version,
+        "playwright_version": pw_version,
+        "PLAYWRIGHT_BROWSERS_PATH": pw_browsers_path,
+        "path_exists": path_exists,
+        "directory_contents": contents,
+        "src_contents": src_contents
+    })
+
 # API - Start connection automation
 @app.route("/api/start", methods=["POST"])
 def start_automation():
