@@ -260,6 +260,7 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
         headless=not headed,
         viewport={"width": 1280, "height": 800},
         proxy=pw_proxy,
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         args=[
             "--disable-blink-features=AutomationControlled",
             "--no-sandbox"
@@ -380,9 +381,18 @@ def perform_auto_login(page, account_id, acc_state):
                 except:
                     continue
         except Exception as e:
-            acc_state.add_log(f"Username selectors wait timed out: {str(e)}", "warning")
+            current_url = page.url
+            page_title = "Unknown"
+            try: page_title = page.title()
+            except: pass
+            acc_state.add_log(f"Username selectors wait timed out on '{current_url}' (Title: '{page_title}'): {str(e)}", "warning")
             
         if not username_sel:
+            current_url = page.url
+            page_title = "Unknown"
+            try: page_title = page.title()
+            except: pass
+            acc_state.add_log(f"Login failure diagnostics -> Current URL: '{current_url}', Page Title: '{page_title}'", "info")
             # Capture error screenshot to see if a CAPTCHA or blocking page was rendered
             try:
                 public_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
@@ -392,7 +402,7 @@ def perform_auto_login(page, account_id, acc_state):
                 acc_state.add_log(f"Login fields missing. Captured debug screenshot. You can view the visual barrier at /login_failed_{account_id}.png", "error")
             except Exception as e:
                 acc_state.add_log(f"Failed to capture debug screenshot: {str(e)}", "warning")
-            raise Exception("LinkedIn login input fields not found. The page might be showing a CAPTCHA, security challenge, or IP block.")
+            raise Exception(f"LinkedIn login input fields not found on '{current_url}' (Title: '{page_title}'). The page might be showing a CAPTCHA, security challenge, or IP block.")
             
         # Fill Username
         page.fill(username_sel, li_username)
