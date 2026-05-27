@@ -254,19 +254,53 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
     else:
         executable_path = find_chrome_executable()
         
-    context = pw.chromium.launch_persistent_context(
-        user_data_dir=user_data_dir,
-        executable_path=executable_path,
-        headless=not headed,
-        viewport={"width": 1280, "height": 800},
-        proxy=pw_proxy,
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        args=[
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox"
-        ]
-    )
+    try:
+        context = pw.chromium.launch_persistent_context(
+            user_data_dir=user_data_dir,
+            executable_path=executable_path,
+            headless=not headed,
+            viewport={"width": 1280, "height": 800},
+            proxy=pw_proxy,
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox"
+            ]
+        )
+    except Exception as e:
+        acc_state.add_log(f"Browser launch failed (cache corrupted): {str(e)}. Self-healing by wiping profile cache...", "warning")
+        import shutil
+        shutil.rmtree(user_data_dir, ignore_errors=True)
+        # Try launching again after wiping the corrupted cache
+        context = pw.chromium.launch_persistent_context(
+            user_data_dir=user_data_dir,
+            executable_path=executable_path,
+            headless=not headed,
+            viewport={"width": 1280, "height": 800},
+            proxy=pw_proxy,
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox"
+            ]
+        )
+        
     context.set_default_timeout(20000)
+    
+    # Inject secure session cookie from Render Environment Variables if available
+    li_at_env = os.environ.get("LI_AT_COOKIE")
+    if li_at_env and not headed:
+        context.add_cookies([{
+            "name": "li_at",
+            "value": li_at_env.strip(),
+            "domain": ".linkedin.com",
+            "path": "/",
+            "secure": True,
+            "httpOnly": True,
+            "sameSite": "None"
+        }])
+        acc_state.add_log("Successfully injected secure LI_AT_COOKIE from Render environment variables!", "success")
+        
     return pw, context
 
 def check_login_status(page):
