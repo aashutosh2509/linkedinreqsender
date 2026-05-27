@@ -205,7 +205,7 @@ function setupEventListeners() {
                 await loadState(); // Refresh dashboard
                 switchAccountView(accId); // Switch to the new account
             } else {
-                alert("Error: " + data.message);
+                alert("Error: " + (data.message || data.error));
             }
         } catch (err) {
             alert("Network error while creating account.");
