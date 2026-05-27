@@ -356,11 +356,66 @@ def perform_auto_login(page, account_id, acc_state):
             time.sleep(2)
             
         acc_state.add_log("Auto-filling LinkedIn login credentials...", "info")
-        page.wait_for_selector("#username", timeout=10000)
-        page.fill("#username", li_username)
+        
+        # Robust Username Selector Discovery
+        username_sel = None
+        user_selectors = ["#username", "input[name='session_key']", "#session_key", "input[autocomplete='username']", "input[type='email']"]
+        
+        # Wait up to 15 seconds for any of the username selectors to become visible
+        combined_user_selector = ", ".join(user_selectors)
+        try:
+            page.wait_for_selector(combined_user_selector, timeout=15000)
+            for sel in user_selectors:
+                try:
+                    el = page.locator(sel).first
+                    if el.is_visible():
+                        username_sel = sel
+                        break
+                except:
+                    continue
+        except Exception as e:
+            acc_state.add_log(f"Username selectors wait timed out: {str(e)}", "warning")
+            
+        if not username_sel:
+            # Capture error screenshot to see if a CAPTCHA or blocking page was rendered
+            try:
+                public_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
+                os.makedirs(public_dir, exist_ok=True)
+                scr_path = os.path.join(public_dir, f"login_failed_{account_id}.png")
+                page.screenshot(path=scr_path)
+                acc_state.add_log(f"Login fields missing. Captured debug screenshot. You can view the visual barrier at /login_failed_{account_id}.png", "error")
+            except Exception as e:
+                acc_state.add_log(f"Failed to capture debug screenshot: {str(e)}", "warning")
+            raise Exception("LinkedIn login input fields not found. The page might be showing a CAPTCHA, security challenge, or IP block.")
+            
+        # Fill Username
+        page.fill(username_sel, li_username)
         time.sleep(random.uniform(0.5, 1.2))
-        page.wait_for_selector("#password", timeout=5000)
-        page.fill("#password", li_password)
+        
+        # Robust Password Selector Discovery
+        password_sel = None
+        pass_selectors = ["#password", "input[name='session_password']", "#session_password", "input[autocomplete='current-password']", "input[type='password']"]
+        
+        # Wait up to 10 seconds for any password selectors to become visible
+        combined_pass_selector = ", ".join(pass_selectors)
+        try:
+            page.wait_for_selector(combined_pass_selector, timeout=10000)
+            for sel in pass_selectors:
+                try:
+                    el = page.locator(sel).first
+                    if el.is_visible():
+                        password_sel = sel
+                        break
+                except:
+                    continue
+        except Exception as e:
+            acc_state.add_log(f"Password selectors wait timed out: {str(e)}", "warning")
+            
+        if not password_sel:
+            raise Exception("Password input field not found on page.")
+            
+        # Fill Password
+        page.fill(password_sel, li_password)
         time.sleep(random.uniform(0.5, 1.2))
         
         # Click login button
