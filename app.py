@@ -592,11 +592,11 @@ def submit_2fa_code():
 def diagnose_pw():
     import sys
     import subprocess
+    import importlib.metadata
     
     pw_version = "Unknown"
     try:
-        import playwright
-        pw_version = playwright.__version__
+        pw_version = importlib.metadata.version("playwright")
     except Exception as e:
         pw_version = f"Error: {str(e)}"
         
@@ -616,6 +616,39 @@ def diagnose_pw():
     except Exception as e:
         write_test_result = f"Error: {str(e)}"
         
+    # Try to make executables executable (chmod +x)
+    chmod_result = []
+    ldd_result = "Not run"
+    execute_test = "Not run"
+    
+    executable_path = os.path.join(pw_browsers_path, "chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell")
+    
+    if os.path.exists(pw_browsers_path):
+        try:
+            for root, dirs, files in os.walk(pw_browsers_path):
+                for f in files:
+                    if f in ["chrome", "chrome-headless-shell", "ffmpeg"]:
+                        fpath = os.path.join(root, f)
+                        os.chmod(fpath, 0o755)
+                        chmod_result.append(f"chmod +x: {fpath}")
+        except Exception as e:
+            chmod_result.append(f"Error chmodding: {str(e)}")
+            
+    # Check if executable exists and run ldd
+    if os.path.exists(executable_path):
+        try:
+            res = subprocess.run(["ldd", executable_path], capture_output=True, text=True)
+            ldd_result = res.stdout + "\n" + res.stderr
+        except Exception as e:
+            ldd_result = f"Error running ldd: {str(e)}"
+            
+        try:
+            # Try launching the browser with --version to see if it responds or fails with library error
+            res_exec = subprocess.run([executable_path, "--version"], capture_output=True, text=True, timeout=5)
+            execute_test = f"Exit code: {res_exec.returncode} | stdout: {res_exec.stdout} | stderr: {res_exec.stderr}"
+        except Exception as e:
+            execute_test = f"Error executing: {str(e)}"
+            
     path_exists = os.path.exists(pw_browsers_path)
     contents = []
     if path_exists:
@@ -641,6 +674,9 @@ def diagnose_pw():
         "PLAYWRIGHT_BROWSERS_PATH": pw_browsers_path,
         "path_exists": path_exists,
         "write_test": write_test_result,
+        "chmod_result": chmod_result,
+        "ldd_result": ldd_result,
+        "execute_test": execute_test,
         "directory_contents": contents,
         "data_contents": data_contents
     })
