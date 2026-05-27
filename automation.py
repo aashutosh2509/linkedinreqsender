@@ -244,11 +244,22 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
             
     executable_path = None
     if platform.system().lower() == "linux":
-        import glob
-        matches = glob.glob(os.path.join(BROWSERS_PATH, "chromium-*/chrome-linux64/chrome"))
-        if matches:
-            executable_path = matches[0]
-            acc_state.add_log(f"Dynamic Path Resolver: Located standard Chromium executable at '{executable_path}'", "info")
+        import os
+        for root, dirs, files in os.walk(BROWSERS_PATH):
+            for file in files:
+                if file in ["chrome", "chrome-headless-shell", "chromium"]:
+                    full_path = os.path.join(root, file)
+                    # Verify it's executable
+                    if os.access(full_path, os.X_OK):
+                        executable_path = full_path
+                        # Prefer chrome over headless shell if we find multiple
+                        if file == "chrome":
+                            break
+            if executable_path and os.path.basename(executable_path) == "chrome":
+                break
+                
+        if executable_path:
+            acc_state.add_log(f"Dynamic Path Resolver: Located Chromium executable at '{executable_path}'", "info")
         else:
             acc_state.add_log("Standard Chromium executable not found in dynamic search. Letting Playwright auto-resolve...", "warning")
     else:
