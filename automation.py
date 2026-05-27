@@ -366,7 +366,8 @@ def perform_auto_login(page, account_id, acc_state):
         
         # Robust Username Selector Discovery
         username_sel = None
-        user_selectors = ["#username", "input[name='session_key']", "#session_key", "input[autocomplete='username']", "input[type='email']"]
+        # Use Playwright's :visible pseudo-class to prevent matching hidden honeypot/mobile inputs that come first in the DOM
+        user_selectors = ["#username:visible", "input[name='session_key']:visible", "#session_key:visible", "input[autocomplete='username']:visible", "input[type='email']:visible"]
         
         # Wait up to 15 seconds for any of the username selectors to become visible
         combined_user_selector = ", ".join(user_selectors)
@@ -410,7 +411,7 @@ def perform_auto_login(page, account_id, acc_state):
         
         # Robust Password Selector Discovery
         password_sel = None
-        pass_selectors = ["#password", "input[name='session_password']", "#session_password", "input[autocomplete='current-password']", "input[type='password']"]
+        pass_selectors = ["#password:visible", "input[name='session_password']:visible", "#session_password:visible", "input[autocomplete='current-password']:visible", "input[type='password']:visible"]
         
         # Wait up to 10 seconds for any password selectors to become visible
         combined_pass_selector = ", ".join(pass_selectors)
