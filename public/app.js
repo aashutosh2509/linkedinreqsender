@@ -158,7 +158,59 @@ function setupEventListeners() {
     // Navigation swappers
     itemAdminTab.addEventListener("click", () => switchWorkspace("admin"));
     
-    btnOpenAddAccountModal.addEventListener("click", quickCreateAndLoginAccount);
+// Wire up Add Account Modal
+    btnOpenAddAccountModal.addEventListener("click", () => {
+        document.getElementById("acc-id-input").value = "";
+        document.getElementById("acc-name-input").value = "";
+        document.getElementById("acc-proxy-server").value = "";
+        document.getElementById("acc-proxy-user").value = "";
+        document.getElementById("acc-proxy-pass").value = "";
+        addAccountModal.style.display = "flex";
+    });
+    
+    document.getElementById("btn-save-account").addEventListener("click", async () => {
+        const accId = document.getElementById("acc-id-input").value.trim();
+        const accName = document.getElementById("acc-name-input").value.trim();
+        const proxyServer = document.getElementById("acc-proxy-server").value.trim();
+        const proxyUser = document.getElementById("acc-proxy-user").value.trim();
+        const proxyPass = document.getElementById("acc-proxy-pass").value.trim();
+        
+        if (!accId || !accName) {
+            alert("ID and Display Name are required!");
+            return;
+        }
+        
+        const payload = {
+            id: accId,
+            name: accName
+        };
+        
+        if (proxyServer) {
+            payload.proxy = {
+                server: proxyServer,
+                username: proxyUser,
+                password: proxyPass
+            };
+        }
+        
+        try {
+            const res = await fetch("/api/accounts/add", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.status === "success") {
+                addAccountModal.style.display = "none";
+                await loadState(); // Refresh dashboard
+                switchAccountView(accId); // Switch to the new account
+            } else {
+                alert("Error: " + data.message);
+            }
+        } catch (err) {
+            alert("Network error while creating account.");
+        }
+    });
     
     btnCloseModal.addEventListener("click", () => addAccountModal.style.display = "none");
     btnCancelModal.addEventListener("click", () => addAccountModal.style.display = "none");
