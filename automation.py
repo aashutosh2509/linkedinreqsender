@@ -304,7 +304,7 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
         context.add_cookies([{
             "name": "li_at",
             "value": clean_cookie,
-            "domain": ".linkedin.com",
+            "url": "https://www.linkedin.com",
             "path": "/",
             "secure": True,
             "httpOnly": True,
