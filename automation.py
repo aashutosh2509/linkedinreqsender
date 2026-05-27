@@ -1,5 +1,38 @@
 import os
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/data/pw-browsers"
+
+# Dynamic Writable Paths Resolver
+def resolve_base_paths():
+    # Try writing to /data to verify mount permissions
+    data_writable = False
+    try:
+        os.makedirs("/data", exist_ok=True)
+        test_file = "/data/.write_test"
+        with open(test_file, 'w') as f:
+            f.write("OK")
+        os.remove(test_file)
+        data_writable = True
+    except Exception:
+        data_writable = False
+        
+    if data_writable:
+        print("[PATH RESOLVER] Persistent /data disk is writable. Using persistent directories.")
+        browsers_path = "/data/pw-browsers"
+        user_data_path = "/data/linkedin_user_data"
+        accounts_db_path = "/data/accounts_db"
+        accounts_json_path = "/data/accounts.json"
+    else:
+        print("[PATH RESOLVER] Persistent /data disk is not writable. Falling back to local directories.")
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        browsers_path = os.path.join(base_dir, "pw-browsers")
+        user_data_path = os.path.join(base_dir, "linkedin_user_data")
+        accounts_db_path = os.path.join(base_dir, "accounts_db")
+        accounts_json_path = os.path.join(base_dir, "accounts.json")
+        
+    return browsers_path, user_data_path, accounts_db_path, accounts_json_path
+
+BROWSERS_PATH, USER_DATA_PATH, ACCOUNTS_DB_PATH, ACCOUNTS_REGISTRY_PATH = resolve_base_paths()
+
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = BROWSERS_PATH
 import json
 import time
 import random
@@ -8,10 +41,8 @@ from datetime import datetime
 import re
 from playwright.sync_api import sync_playwright
 
-# Path to central account database and browser profiles
-ACCOUNTS_REGISTRY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "accounts.json")
-BASE_USER_DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "linkedin_user_data", "profiles")
-BASE_ACCOUNTS_DB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "accounts_db")
+BASE_USER_DATA_DIR = os.path.join(USER_DATA_PATH, "profiles")
+BASE_ACCOUNTS_DB_DIR = ACCOUNTS_DB_PATH
 DB_PATH = os.path.join(BASE_ACCOUNTS_DB_DIR, "db_default.json")
 
 class AutomationState:

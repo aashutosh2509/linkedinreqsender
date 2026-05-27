@@ -1,12 +1,32 @@
 import os
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/data/pw-browsers"
+import json
+import re
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+from werkzeug.utils import secure_filename
+import openpyxl
+
+import automation
+from automation import (
+    get_account_state,
+    load_accounts_registry,
+    save_accounts_registry,
+    update_account_status_in_registry,
+    load_db,
+    save_db,
+    open_linkedin_for_login,
+    run_automation_worker,
+    sync_acceptance_task,
+    queue_runner,
+    BROWSERS_PATH
+)
 
 def ensure_playwright_browsers():
     def run():
         import subprocess
         import sys
         
-        pw_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/data/pw-browsers")
+        pw_path = BROWSERS_PATH
         try:
             os.makedirs(pw_path, exist_ok=True)
         except Exception as e:
@@ -41,7 +61,7 @@ def ensure_playwright_browsers():
                     check=True
                 )
                 print(f"Install stdout: {result.stdout}")
-                print("Playwright Chromium installed successfully on persistent disk in background!")
+                print("Playwright Chromium installed successfully in background!")
             except Exception as e:
                 print(f"[ERROR] Failed to install Playwright browsers in background: {str(e)}")
                 if 'result' in locals() and 'result' in vars() and result:
@@ -51,26 +71,8 @@ def ensure_playwright_browsers():
     import platform
     if platform.system().lower() == "linux":
         threading.Thread(target=run, daemon=True).start()
-import json
-import re
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
-from werkzeug.utils import secure_filename
-import openpyxl
 
-import automation
-from automation import (
-    get_account_state,
-    load_accounts_registry,
-    save_accounts_registry,
-    update_account_status_in_registry,
-    load_db,
-    save_db,
-    open_linkedin_for_login,
-    run_automation_worker,
-    sync_acceptance_task,
-    queue_runner
-)
+ensure_playwright_browsers()
 
 app = Flask(__name__, static_folder="public")
 CORS(app)
