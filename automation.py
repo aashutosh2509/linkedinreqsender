@@ -244,7 +244,6 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
             
     executable_path = None
     if platform.system().lower() == "linux":
-        import os
         for root, dirs, files in os.walk(BROWSERS_PATH):
             for file in files:
                 if file in ["chrome", "chrome-headless-shell", "chromium"]:
