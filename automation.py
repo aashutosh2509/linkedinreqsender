@@ -386,6 +386,17 @@ def perform_auto_login(page, account_id, acc_state):
         return False
         
     try:
+        # First check if we are already authenticated (e.g. via injected LI_AT_COOKIE environment variable)
+        acc_state.add_log("Checking current authentication state...", "info")
+        try:
+            page.goto("https://www.linkedin.com/feed/", wait_until="commit", timeout=30000)
+            time.sleep(4)
+            if "login" not in page.url and "signup" not in page.url and not page.locator("a:has-text('Sign in')").is_visible():
+                acc_state.add_log("Session already authenticated via secure cookies! Bypassing auto-login.", "success")
+                return True
+        except Exception as e:
+            acc_state.add_log(f"Feed check warning: {str(e)}", "warning")
+            
         # Check if we are on login page, if not, go there
         if "login" not in page.url:
             acc_state.add_log("Navigating to login page for auto-login...", "info")
