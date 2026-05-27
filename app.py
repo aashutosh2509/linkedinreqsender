@@ -254,9 +254,6 @@ def delete_account():
     req_data = request.json or {}
     acc_id = req_data.get("id", "").strip()
     
-    if acc_id == "default":
-        return err_response("The primary default account cannot be deleted.")
-        
     accounts = load_accounts_registry()
     acc_to_remove = None
     for acc in accounts:
