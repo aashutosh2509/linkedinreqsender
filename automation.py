@@ -243,7 +243,15 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
             pw_proxy["password"] = proxy_config["password"]
             
     executable_path = None
-    if platform.system().lower() != "linux":
+    if platform.system().lower() == "linux":
+        import glob
+        matches = glob.glob(os.path.join(BROWSERS_PATH, "chromium-*/chrome-linux64/chrome"))
+        if matches:
+            executable_path = matches[0]
+            acc_state.add_log(f"Dynamic Path Resolver: Located standard Chromium executable at '{executable_path}'", "info")
+        else:
+            acc_state.add_log("Standard Chromium executable not found in dynamic search. Letting Playwright auto-resolve...", "warning")
+    else:
         executable_path = find_chrome_executable()
         
     context = pw.chromium.launch_persistent_context(
