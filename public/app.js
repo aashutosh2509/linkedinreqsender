@@ -1561,6 +1561,12 @@ async function deleteAccountProfile(accountId) {
         return;
     }
     
+    const pass = await promptPassword("Delete Account", "Enter Administrator Password to delete this account:");
+    if (pass !== "admin123") {
+        alert("Permission Denied.");
+        return;
+    }
+    
     // Find account name
     const acc = accountsRegistry.find(a => a.id === accountId);
     const displayName = acc ? acc.name : accountId;
