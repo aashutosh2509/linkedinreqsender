@@ -436,7 +436,7 @@ def perform_auto_login(page, account_id, acc_state):
         time.sleep(random.uniform(0.5, 1.2))
         
         # Click login button
-        submit_btn = page.locator("button[type='submit'], button:has-text('Sign in')").first
+        submit_btn = page.locator("button[type='submit']:visible, button:has-text('Sign in'):visible").first
         submit_btn.wait_for(state="visible", timeout=5000)
         submit_btn.click()
         
