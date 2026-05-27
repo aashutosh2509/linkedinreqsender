@@ -899,6 +899,85 @@ def upload_file():
         acc_state.add_log(f"Error parsing Excel: {str(e)}", "error")
         return err_response(f"Failed to process Excel file: {str(e)}")
 
+# ==========================================
+# CLOUD-SYNC ARCHITECTURE (RENDER <-> LOCAL)
+# ==========================================
+
+@app.route("/api/cloud-sync/receive", methods=["POST"])
+def receive_cloud_sync():
+    """Receiver endpoint that runs on Render to accept beamed state."""
+    data = request.json or {}
+    secret = data.get("secret")
+    if secret != "cloud_sync_master_key_123":
+        return err_response("Unauthorized cloud sync attempt.", 401)
+        
+    accounts = data.get("accounts", [])
+    databases = data.get("databases", {})
+    logs = data.get("logs", {})
+    
+    # Overwrite registry
+    if accounts:
+        save_accounts_registry(accounts)
+        
+    # Overwrite databases
+    for acc_id, db_data in databases.items():
+        save_db(db_data, acc_id)
+        
+    # Overwrite live logs
+    for acc_id, log_list in logs.items():
+        acc_state = get_account_state(acc_id)
+        acc_state.logs = log_list
+        
+    return jsonify({"status": "success", "message": "Cloud state synchronized successfully."})
+
+def cloud_sync_worker():
+    """Background thread that runs locally and beams state to Render."""
+    import time
+    import urllib.request
+    import json
+    
+    cloud_url = "https://linkedinreqsender.onrender.com"
+    
+    while True:
+        try:
+            time.sleep(10)
+            
+            # Only beam data if we are running locally!
+            if not os.environ.get("RENDER"):
+                accounts = load_accounts_registry()
+                databases = {}
+                logs = {}
+                
+                for acc in accounts:
+                    acc_id = acc.get("id")
+                    databases[acc_id] = load_db(acc_id)
+                    logs[acc_id] = get_account_state(acc_id).logs
+                    
+                payload = {
+                    "secret": "cloud_sync_master_key_123",
+                    "accounts": accounts,
+                    "databases": databases,
+                    "logs": logs
+                }
+                
+                data_bytes = json.dumps(payload).encode('utf-8')
+                req = urllib.request.Request(
+                    f"{cloud_url}/api/cloud-sync/receive", 
+                    data=data_bytes, 
+                    headers={'Content-Type': 'application/json'}
+                )
+                
+                try:
+                    urllib.request.urlopen(req, timeout=5)
+                except Exception as e:
+                    # Silently fail if Render is asleep or offline
+                    pass
+        except Exception:
+            pass
+
+import threading
+threading.Thread(target=cloud_sync_worker, daemon=True).start()
+
 if __name__ == "__main__":
     # Create empty database structures if not present and reset stale statuses
     accounts = load_accounts_registry()
