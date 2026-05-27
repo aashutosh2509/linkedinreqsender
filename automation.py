@@ -273,8 +273,10 @@ def check_login_status(page):
     Checks if user is logged into LinkedIn. If not, directs them to login.
     """
     try:
-        page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded")
-        time.sleep(3)
+        # Use wait_until="commit" with a generous timeout to resolve instantly on server response, 
+        # avoiding freezes from assets or trackers that could block domcontentloaded.
+        page.goto("https://www.linkedin.com/feed/", wait_until="commit", timeout=30000)
+        time.sleep(4)
         if "login" in page.url or "signup" in page.url or page.locator("a:has-text('Sign in')").is_visible():
             try:
                 screenshot_dir = r"C:\Users\lenovo\.gemini\antigravity\brain\eeb3f292-7445-4086-bb03-812d2a3c527c"
@@ -309,9 +311,9 @@ def test_login_session(account_id="default"):
         playwright, context = launch_browser(account_id, headed=False, proxy_config=proxy_cfg)
         page = context.new_page()
         
-        # Navigate to feed to see if we're authenticated
-        page.goto("https://www.linkedin.com/feed/", wait_until="domcontentloaded", timeout=15000)
-        time.sleep(3)
+        # Navigate to feed to see if we're authenticated (using wait_until="commit" for speed and reliability)
+        page.goto("https://www.linkedin.com/feed/", wait_until="commit", timeout=25000)
+        time.sleep(4)
         
         # If we redirect to log in or see sign-in, we are NOT logged in
         if "login" in page.url or "signup" in page.url or page.locator("a:has-text('Sign in')").is_visible():
@@ -352,8 +354,12 @@ def perform_auto_login(page, account_id, acc_state):
         # Check if we are on login page, if not, go there
         if "login" not in page.url:
             acc_state.add_log("Navigating to login page for auto-login...", "info")
-            page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded", timeout=20000)
-            time.sleep(2)
+            try:
+                page.goto("https://www.linkedin.com/login", wait_until="commit", timeout=30000)
+            except Exception as e:
+                acc_state.add_log(f"Initial navigation warning: {str(e)}. Retrying...", "warning")
+                page.goto("https://www.linkedin.com/login", wait_until="commit", timeout=30000)
+            time.sleep(3)
             
         acc_state.add_log("Auto-filling LinkedIn login credentials...", "info")
         
