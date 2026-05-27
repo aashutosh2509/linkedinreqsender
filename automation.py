@@ -290,9 +290,10 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
     # Inject secure session cookie from Render Environment Variables if available
     li_at_env = os.environ.get("LI_AT_COOKIE")
     if li_at_env and not headed:
+        clean_cookie = li_at_env.strip().strip('"').strip("'")
         context.add_cookies([{
             "name": "li_at",
-            "value": li_at_env.strip(),
+            "value": clean_cookie,
             "domain": ".linkedin.com",
             "path": "/",
             "secure": True,
