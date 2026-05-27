@@ -1558,8 +1558,8 @@ async function submit2FACode() {
 }
 
 async function deleteAccountProfile(accountId) {
-    if (accountId === "default" || accountId === "admin") {
-        alert("The primary default profile cannot be deleted.");
+    if (accountId === "admin") {
+        alert("The admin hub cannot be deleted.");
         return;
     }
     
