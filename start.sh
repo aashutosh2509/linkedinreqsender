@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-export PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/pw-browsers
+export PLAYWRIGHT_BROWSERS_PATH=/data/pw-browsers
 
 # Setup directories on the persistent disk
 mkdir -p /data/linkedin_user_data

@@ -1,5 +1,5 @@
 import os
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/opt/render/project/src/pw-browsers"
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/data/pw-browsers"
 import json
 import time
 import random

@@ -1,5 +1,54 @@
 import os
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/opt/render/project/src/pw-browsers"
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/data/pw-browsers"
+
+def ensure_playwright_browsers():
+    import subprocess
+    import sys
+    
+    pw_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/data/pw-browsers")
+    try:
+        os.makedirs(pw_path, exist_ok=True)
+    except Exception as e:
+        print(f"[ERROR] Failed to create directories for Playwright: {str(e)}")
+        return
+        
+    is_installed = False
+    try:
+        for root, dirs, files in os.walk(pw_path):
+            if any(f == "chrome" or f == "chrome-headless-shell" for f in files):
+                is_installed = True
+                break
+    except Exception:
+        pass
+        
+    if not is_installed:
+        print("--------------------------------------------------")
+        print("Playwright browsers not found! Running self-healing install...")
+        print(f"Target path: {pw_path}")
+        print("--------------------------------------------------")
+        try:
+            env = os.environ.copy()
+            env["PLAYWRIGHT_BROWSERS_PATH"] = pw_path
+            python_exe = sys.executable or "python"
+            
+            print("Installing Chromium browser...")
+            result = subprocess.run(
+                [python_exe, "-m", "playwright", "install", "chromium"],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            print(f"Install stdout: {result.stdout}")
+            print("Playwright Chromium installed successfully on persistent disk!")
+        except Exception as e:
+            print(f"[ERROR] Failed to install Playwright browsers: {str(e)}")
+            if 'result' in locals() and 'result' in vars() and result:
+                print(f"Install stderr: {result.stderr}")
+
+import platform
+if platform.system().lower() == "linux":
+    ensure_playwright_browsers()
 import json
 import re
 from flask import Flask, request, jsonify, send_from_directory
