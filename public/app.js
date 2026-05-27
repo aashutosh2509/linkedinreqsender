@@ -2063,10 +2063,11 @@ async function adminClearDatabases() {
         selectedAccountIdsForBulk.clear();
         const selectAllCheckbox = document.getElementById("checkbox-select-all-accounts");
         if (selectAllCheckbox) selectAllCheckbox.checked = false;
-        await refreshAccountsRegistry();
+        await fetchAccountsRegistry();
         renderAdminDashboardView();
     } catch (e) {
         alert("Network error while deleting databases.");
+        console.error(e);
     } finally {
         btn.disabled = false;
         btn.innerHTML = originalText;
