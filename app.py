@@ -594,38 +594,51 @@ def diagnose_pw():
         import playwright
         pw_version = playwright.__version__
     except Exception as e:
-        pw_version = f"Error importing: {str(e)}"
+        pw_version = f"Error: {str(e)}"
         
-    pw_browsers_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "Not Set")
+    pw_browsers_path = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/data/pw-browsers")
     
+    # Run dynamic write test to diagnose permissions
+    write_test_result = "Not attempted"
+    try:
+        os.makedirs(pw_browsers_path, exist_ok=True)
+        test_file = os.path.join(pw_browsers_path, "write_test.txt")
+        with open(test_file, 'w') as f:
+            f.write("OK")
+        with open(test_file, 'r') as f:
+            content = f.read()
+        write_test_result = f"Success! Read: '{content}'"
+        os.remove(test_file)
+    except Exception as e:
+        write_test_result = f"Error: {str(e)}"
+        
     path_exists = os.path.exists(pw_browsers_path)
     contents = []
     if path_exists:
         try:
             for root, dirs, files in os.walk(pw_browsers_path):
-                # Only go 3 levels deep to avoid massive output
                 depth = root.replace(pw_browsers_path, "").count(os.sep)
                 if depth < 3:
                     contents.append(f"{root} (dirs: {dirs}, files: {files[:10]})")
         except Exception as e:
             contents.append(f"Error listing: {str(e)}")
             
-    # Also check what's in /opt/render/project/src/
-    src_contents = []
+    # Also check what's in /data/
+    data_contents = []
     try:
-        src_path = "/opt/render/project/src"
-        if os.path.exists(src_path):
-            src_contents = os.listdir(src_path)
+        if os.path.exists("/data"):
+            data_contents = os.listdir("/data")
     except Exception as e:
-        src_contents = [f"Error listing /src: {str(e)}"]
+        data_contents = [f"Error listing /data: {str(e)}"]
 
     return jsonify({
         "python_version": sys.version,
         "playwright_version": pw_version,
         "PLAYWRIGHT_BROWSERS_PATH": pw_browsers_path,
         "path_exists": path_exists,
+        "write_test": write_test_result,
         "directory_contents": contents,
-        "src_contents": src_contents
+        "data_contents": data_contents
     })
 
 # API - Start connection automation
