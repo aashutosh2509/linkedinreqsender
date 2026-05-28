@@ -16,6 +16,12 @@ let pollingInterval = null;
 let selectedAccountIdsForBulk = new Set();
 let hasAdminAccess = false; // Added for password protection
 let accountsCustomOrder = null; // Stores shuffled/custom order of account IDs
+let isCloudEnvironment = false; // True if running on Render
+
+// Caches to prevent DOM flickering on fast refresh
+let lastSidebarHtmlCache = "";
+let lastAdminTableHtmlCache = "";
+let lastContactsTableHtmlCache = "";
 
 // UI Elements: Navigation Sidebar
 const accountsMenuList = document.getElementById("accounts-menu-list");
@@ -761,19 +767,21 @@ function renderSidebarAccounts() {
             </button>
         `;
     });
-    
-    accountsMenuList.innerHTML = html;
-    
-    // Bind click swap events
-    const items = accountsMenuList.querySelectorAll(".account-item");
-    items.forEach(it => {
-        it.addEventListener("click", () => {
-            const accId = it.getAttribute("data-account-id");
-            switchWorkspace(accId);
+    if (lastSidebarHtmlCache !== html) {
+        lastSidebarHtmlCache = html;
+        accountsMenuList.innerHTML = html;
+        
+        // Bind click swap events
+        const items = accountsMenuList.querySelectorAll(".account-item");
+        items.forEach(it => {
+            it.addEventListener("click", () => {
+                const accId = it.getAttribute("data-account-id");
+                switchWorkspace(accId);
+            });
         });
-    });
-    
-    lucide.createIcons();
+        
+        lucide.createIcons();
+    }
 }
 
 // Process Admin dashboard view counts & registered tables
@@ -916,8 +924,12 @@ function renderAdminDashboardView() {
         `;
     });
     
-    adminAccountsTableBody.innerHTML = tableHtml;
-    setupRowDragAndDrop();
+    if (lastAdminTableHtmlCache !== tableHtml) {
+        lastAdminTableHtmlCache = tableHtml;
+        adminAccountsTableBody.innerHTML = tableHtml;
+        setupRowDragAndDrop();
+        lucide.createIcons();
+    }
     
     // Bind click/change hooks to individual checkboxes
     const rowCheckboxes = adminAccountsTableBody.querySelectorAll(".account-select-checkbox");
@@ -1981,9 +1993,11 @@ function renderWorkspaceTable() {
             </tr>
         `;
     });
-    
-    tableBody.innerHTML = html;
-    lucide.createIcons();
+    if (lastContactsTableHtmlCache !== html) {
+        lastContactsTableHtmlCache = html;
+        tableBody.innerHTML = html;
+        lucide.createIcons();
+    }
 }
 
 // Opens the reset modal — no action until user clicks a button
