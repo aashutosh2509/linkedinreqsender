@@ -139,8 +139,6 @@ def load_accounts_registry():
             with open(ACCOUNTS_REGISTRY_PATH, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 return data if isinstance(data, list) else []
-        except FileNotFoundError:
-            return []
         except Exception:
             time.sleep(0.1)
     return []
