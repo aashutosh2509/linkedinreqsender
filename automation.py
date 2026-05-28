@@ -133,11 +133,17 @@ def load_accounts_registry():
             return [default_acc]
         except Exception:
             return []
-    try:
-        with open(ACCOUNTS_REGISTRY_PATH, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return []
+    import time
+    for _ in range(5):
+        try:
+            with open(ACCOUNTS_REGISTRY_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except FileNotFoundError:
+            return []
+        except Exception:
+            time.sleep(0.1)
+    return []
 
 def save_accounts_registry(accounts):
     try:
@@ -174,13 +180,18 @@ def load_db(account_id="default"):
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         save_db([], account_id)
         return []
-    try:
-        with open(db_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        acc_state = get_account_state(account_id)
-        acc_state.add_log(f"Error loading database: {str(e)}", "error")
-        return []
+    import time
+    for _ in range(5):
+        try:
+            with open(db_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except Exception:
+            time.sleep(0.1)
+            
+    acc_state = get_account_state(account_id)
+    acc_state.add_log("Error loading database after retries", "error")
+    return []
 
 def save_db(data, account_id="default"):
     db_path = get_db_path(account_id)
