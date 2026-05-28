@@ -108,7 +108,10 @@ def get_account_state(account_id="default"):
 state = get_account_state("default")
 
 # Registry Access Helpers
+_cached_accounts = []
+
 def load_accounts_registry():
+    global _cached_accounts
     if not os.path.exists(ACCOUNTS_REGISTRY_PATH):
         # Create a default registry if missing
         default_acc = {
@@ -128,20 +131,26 @@ def load_accounts_registry():
             "progress_percent": 0
         }
         try:
-            with open(ACCOUNTS_REGISTRY_PATH, 'w', encoding='utf-8') as f:
+            tmp_path = ACCOUNTS_REGISTRY_PATH + ".tmp"
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump([default_acc], f, indent=4)
+            os.replace(tmp_path, ACCOUNTS_REGISTRY_PATH)
+            _cached_accounts = [default_acc]
             return [default_acc]
         except Exception:
-            return []
+            return _cached_accounts
+            
     import time
-    for _ in range(5):
+    for _ in range(10):
         try:
             with open(ACCOUNTS_REGISTRY_PATH, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data if isinstance(data, list) else []
+                if isinstance(data, list):
+                    _cached_accounts = data
+                    return data
         except Exception:
-            time.sleep(0.1)
-    return []
+            time.sleep(0.2)
+    return _cached_accounts
 
 def save_accounts_registry(accounts):
     try:
@@ -172,24 +181,31 @@ def update_account_status_in_registry(account_id, status=None, current_action=No
 def get_db_path(account_id):
     return os.path.join(BASE_ACCOUNTS_DB_DIR, f"db_{account_id}.json")
 
+_cached_dbs = {}
+
 def load_db(account_id="default"):
+    global _cached_dbs
     db_path = get_db_path(account_id)
     if not os.path.exists(db_path):
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         save_db([], account_id)
+        _cached_dbs[account_id] = []
         return []
+        
     import time
-    for _ in range(5):
+    for _ in range(10):
         try:
             with open(db_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data if isinstance(data, list) else []
+                if isinstance(data, list):
+                    _cached_dbs[account_id] = data
+                    return data
         except Exception:
-            time.sleep(0.1)
+            time.sleep(0.2)
             
     acc_state = get_account_state(account_id)
-    acc_state.add_log("Error loading database after retries", "error")
-    return []
+    acc_state.add_log("Error loading database after retries, using cache", "error")
+    return _cached_dbs.get(account_id, [])
 
 def save_db(data, account_id="default"):
     db_path = get_db_path(account_id)
