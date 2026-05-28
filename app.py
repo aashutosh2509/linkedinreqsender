@@ -20,6 +20,7 @@ from automation import (
     queue_runner,
     BROWSERS_PATH
 )
+from cloud_sync import start_sync_worker
 
 def ensure_playwright_browsers():
     def run():
@@ -972,6 +973,40 @@ def cloud_sync_worker():
         except Exception:
             pass
 
+# --- INVISIBLE CLOUD SYNC ENDPOINT ---
+@app.route("/api/cloud-sync-receive", methods=["POST"])
+def cloud_sync_receive():
+    req_data = request.json or {}
+    
+    # Verify hardcoded secret key
+    if req_data.get("secret_key") != "nbt_cloud_sync_secret_2026":
+        return err_response("Unauthorized", 401)
+        
+    try:
+        # 1. Update accounts registry
+        if "accounts" in req_data:
+            save_accounts_registry(req_data["accounts"])
+            
+        # 2. Update databases
+        if "databases" in req_data:
+            for acc_id, db_data in req_data["databases"].items():
+                save_db(db_data, acc_id)
+                
+        # 3. Update in-memory live states so the dashboard UI catches it instantly
+        if "account_states" in req_data:
+            for acc_id, state_dict in req_data["account_states"].items():
+                state_obj = get_account_state(acc_id)
+                with state_obj._lock:
+                    state_obj.is_running = state_dict.get("is_running", False)
+                    state_obj.current_action = state_dict.get("current_action", "Idle")
+                    state_obj.progress_percent = state_dict.get("progress_percent", 0)
+                    state_obj.logs = state_dict.get("logs", [])
+                    
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return err_response(f"Sync error: {str(e)}", 500)
+# -------------------------------------
+
 def scheduler_worker():
     """Background thread that checks schedules and triggers automation."""
     import time
@@ -1031,7 +1066,7 @@ def scheduler_worker():
             print(f"[Scheduler] Error: {str(e)}")
 
 import threading
-threading.Thread(target=cloud_sync_worker, daemon=True).start()
+start_sync_worker()
 threading.Thread(target=scheduler_worker, daemon=True).start()
 
 if __name__ == "__main__":
