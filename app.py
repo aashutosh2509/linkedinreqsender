@@ -901,6 +901,12 @@ def upload_file():
 # CLOUD-SYNC ARCHITECTURE (RENDER <-> LOCAL)
 # ==========================================
 
+_sync_history = []
+
+@app.route("/api/debug-sync")
+def debug_sync():
+    return jsonify(_sync_history)
+
 @app.route("/api/cloud-sync/receive", methods=["POST"])
 def receive_cloud_sync():
     """Receiver endpoint that runs on Render to accept beamed state."""
@@ -913,6 +919,17 @@ def receive_cloud_sync():
     databases = data.get("databases", {})
     logs = data.get("logs", {})
     
+    try:
+        # Debug logger
+        acc_count = len(accounts)
+        ip = request.remote_addr
+        import time
+        _sync_history.append({"time": time.time(), "ip": ip, "acc_count": acc_count, "endpoint": "old"})
+        if len(_sync_history) > 50:
+            _sync_history.pop(0)
+    except Exception:
+        pass
+
     # Overwrite registry
     if accounts:
         save_accounts_registry(accounts)
@@ -983,6 +1000,14 @@ def cloud_sync_receive():
         return err_response("Unauthorized", 401)
         
     try:
+        # Debug logger
+        acc_count = len(req_data.get("accounts", []))
+        ip = request.remote_addr
+        import time
+        _sync_history.append({"time": time.time(), "ip": ip, "acc_count": acc_count, "endpoint": "new"})
+        if len(_sync_history) > 50:
+            _sync_history.pop(0)
+
         # 1. Update accounts registry
         if "accounts" in req_data:
             save_accounts_registry(req_data["accounts"])
