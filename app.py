@@ -972,8 +972,67 @@ def cloud_sync_worker():
         except Exception:
             pass
 
+def scheduler_worker():
+    """Background thread that checks schedules and triggers automation."""
+    import time
+    import datetime
+    
+    while True:
+        try:
+            time.sleep(30)
+            now = datetime.datetime.now()
+            current_time = now.strftime("%H:%M")
+            current_day = now.weekday() # 0 = Monday, 6 = Sunday
+            current_date = now.strftime("%Y-%m-%d")
+            
+            accounts = load_accounts_registry()
+            dirty = False
+            for acc in accounts:
+                acc_id = acc.get("id")
+                config = acc.get("config", {})
+                sched = config.get("schedule")
+                
+                if not sched or not sched.get("enabled"):
+                    continue
+                    
+                target_time = str(sched.get("time", "")).strip()
+                target_days = sched.get("days", [])
+                last_run = sched.get("last_run", "")
+                
+                # Check if it's the correct day, minute, and hasn't run yet today
+                if current_day in target_days and current_time == target_time and last_run != current_date:
+                    acc_state = get_account_state(acc_id)
+                    # Don't trigger if already running
+                    if acc_state.is_running:
+                        continue
+                        
+                    sched["last_run"] = current_date
+                    dirty = True
+                    
+                    acc_state.add_log(f"Auto-scheduler triggered for {target_time}!", "info")
+                    
+                    # Trigger automation in background
+                    run_automation_worker(
+                        note_template=config.get("note_template", ""),
+                        send_with_note=config.get("send_with_note", False),
+                        delay_min=config.get("delay_min", 30),
+                        delay_max=config.get("delay_max", 70),
+                        daily_limit=config.get("daily_limit", 25),
+                        weekly_limit=config.get("weekly_limit", 150),
+                        start_index=config.get("start_index"),
+                        end_index=config.get("end_index"),
+                        account_id=acc_id
+                    )
+                    
+            if dirty:
+                save_accounts_registry(accounts)
+                
+        except Exception as e:
+            print(f"[Scheduler] Error: {str(e)}")
+
 import threading
 threading.Thread(target=cloud_sync_worker, daemon=True).start()
+threading.Thread(target=scheduler_worker, daemon=True).start()
 
 if __name__ == "__main__":
     # Create empty database structures if not present and reset stale statuses
