@@ -1563,7 +1563,7 @@ def run_automation_worker_sync(account_id="default", config=None):
                         acc_state.add_log(f"Failed to capture debug screenshot: {str(ss_err)}", "warning")
 
                 time.sleep(random.uniform(3, 5))
-                page.evaluate("window.scrollTo(0, 300)")
+                page.evaluate("window.scrollTo(0, 0)")
                 time.sleep(1.5)
                 
                 HEADER_ANCHOR = "xpath=//main//*[self::section or contains(@class, 'card') or contains(@class, 'top-card')][.//h1][1]"
@@ -1616,7 +1616,7 @@ def run_automation_worker_sync(account_id="default", config=None):
                             if (!el.offsetHeight && !el.offsetWidth) continue;
                             const text = el.textContent.trim();
                             // Exact distance badge check (e.g. "1st", "2nd", "3rd", "· 1st", "• 2nd")
-                            if (/^[·•\s]*(1st|2nd|3rd|4th\+)[·•\s]*$/i.test(text)) {
+                            if (/^[·•\\s]*(1st|2nd|3rd|4th\\+)[·•\\s]*$/i.test(text)) {
                                 degree = text.includes('1st') ? "1st" : "other";
                                 break;
                             }
