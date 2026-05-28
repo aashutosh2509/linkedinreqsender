@@ -907,6 +907,10 @@ _sync_history = []
 def debug_sync():
     return jsonify(_sync_history)
 
+@app.route("/api/debug-headers")
+def debug_headers():
+    return jsonify(dict(request.headers))
+
 @app.route("/api/cloud-sync/receive", methods=["POST"])
 def receive_cloud_sync():
     """Receiver endpoint that runs on Render to accept beamed state."""
