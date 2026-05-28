@@ -922,7 +922,7 @@ def receive_cloud_sync():
     try:
         # Debug logger
         acc_count = len(accounts)
-        ip = request.remote_addr
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
         import time
         _sync_history.append({"time": time.time(), "ip": ip, "acc_count": acc_count, "endpoint": "old"})
         if len(_sync_history) > 50:
@@ -1002,7 +1002,7 @@ def cloud_sync_receive():
     try:
         # Debug logger
         acc_count = len(req_data.get("accounts", []))
-        ip = request.remote_addr
+        ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
         import time
         _sync_history.append({"time": time.time(), "ip": ip, "acc_count": acc_count, "endpoint": "new"})
         if len(_sync_history) > 50:
