@@ -972,8 +972,8 @@ def cloud_sync_worker():
         except Exception:
             pass
 
-# Cloud sync is intentionally disabled for privacy. Your local data will no longer be pushed to Render.
-# threading.Thread(target=cloud_sync_worker, daemon=True).start()
+import threading
+threading.Thread(target=cloud_sync_worker, daemon=True).start()
 
 if __name__ == "__main__":
     # Create empty database structures if not present and reset stale statuses
