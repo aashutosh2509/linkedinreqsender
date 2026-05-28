@@ -1615,17 +1615,10 @@ def run_automation_worker_sync(account_id="default", config=None):
                         for (const el of allSpans) {
                             if (!el.offsetHeight && !el.offsetWidth) continue;
                             const text = el.textContent.trim();
-                            if (/\b1st\b/i.test(text)) {
-                                if (text.length < 30 && !text.toLowerCase().includes("class") && !text.toLowerCase().includes("year") && !text.toLowerCase().includes("anniversary")) {
-                                    degree = "1st";
-                                    break;
-                                }
-                            }
-                            if (/\b(2nd|3rd)\b/i.test(text)) {
-                                if (text.length < 30 && !text.toLowerCase().includes("class") && !text.toLowerCase().includes("year") && !text.toLowerCase().includes("anniversary")) {
-                                    degree = "other";
-                                    break;
-                                }
+                            // Exact distance badge check (e.g. "1st", "2nd", "3rd", "· 1st", "• 2nd")
+                            if (/^[·•\s]*(1st|2nd|3rd|4th\+)[·•\s]*$/i.test(text)) {
+                                degree = text.includes('1st') ? "1st" : "other";
+                                break;
                             }
                         }
                         
@@ -1633,23 +1626,12 @@ def run_automation_worker_sync(account_id="default", config=None):
                             return { status: "Connected" };
                         }
                         
-                        // 4. Fourth check: If degree is not other, verify if there's a Messaging thread link or valid Message button
-                        if (degree !== "other") {
-                            for (const el of actions) {
-                                if (!el.offsetHeight && !el.offsetWidth) continue;
-                                const text = el.textContent.trim().toLowerCase();
-                                const label = (el.getAttribute('aria-label') || '').toLowerCase();
-                                const href = el.getAttribute('href') || '';
-                                
-                                if (href.includes('/messaging/thread/')) {
-                                    return { status: "Connected" };
-                                }
-                                
-                                if (text === 'message' || label === 'message' || label.startsWith('message ') || text.startsWith('message ')) {
-                                    if (!text.includes('inmail') && !label.includes('inmail') && !label.includes('premium')) {
-                                        return { status: "Connected" };
-                                    }
-                                }
+                        // 4. Fourth check: Verify if there's a Messaging thread link
+                        for (const el of actions) {
+                            if (!el.offsetHeight && !el.offsetWidth) continue;
+                            const href = el.getAttribute('href') || '';
+                            if (href.includes('/messaging/thread/')) {
+                                return { status: "Connected" };
                             }
                         }
                         
