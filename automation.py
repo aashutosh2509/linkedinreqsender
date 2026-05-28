@@ -141,8 +141,10 @@ def load_accounts_registry():
 
 def save_accounts_registry(accounts):
     try:
-        with open(ACCOUNTS_REGISTRY_PATH, 'w', encoding='utf-8') as f:
+        tmp_path = ACCOUNTS_REGISTRY_PATH + ".tmp"
+        with open(tmp_path, 'w', encoding='utf-8') as f:
             json.dump(accounts, f, indent=4)
+        os.replace(tmp_path, ACCOUNTS_REGISTRY_PATH)
     except Exception as e:
         print(f"[ERROR] Registry save failed: {str(e)}")
 
@@ -184,8 +186,10 @@ def save_db(data, account_id="default"):
     db_path = get_db_path(account_id)
     try:
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        with open(db_path, 'w', encoding='utf-8') as f:
+        tmp_path = db_path + ".tmp"
+        with open(tmp_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
+        os.replace(tmp_path, db_path)
     except Exception as e:
         acc_state = get_account_state(account_id)
         acc_state.add_log(f"Error saving database: {str(e)}", "error")
