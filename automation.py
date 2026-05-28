@@ -1566,7 +1566,7 @@ def run_automation_worker_sync(account_id="default", config=None):
                 page.evaluate("window.scrollTo(0, 300)")
                 time.sleep(1.5)
                 
-                HEADER_ANCHOR = "xpath=(//main//section[1]//h1 | //main//section[1]//h2)[1]/ancestor::section[1]"
+                HEADER_ANCHOR = "xpath=//main//*[self::section or contains(@class, 'card') or contains(@class, 'top-card')][.//h1][1]"
                 
                 # Robust JS-based connection status checker (scoped to profile top card & degree-aware)
                 status_result = page.evaluate("""
@@ -1713,7 +1713,9 @@ def run_automation_worker_sync(account_id="default", config=None):
                 direct_connect_selectors = [
                     f"{HEADER_ANCHOR}//button[contains(., 'Connect')]",
                     f"{HEADER_ANCHOR}//*[text()='Connect']",
-                    "main [class*='top-card'] button:has-text('Connect')"
+                    "main [class*='top-card'] button:has-text('Connect')",
+                    "xpath=//main//button[contains(., 'Connect') and not(contains(@aria-label, 'Remove'))]",
+                    "button:has-text('Connect')"
                 ]
                 try:
                     page.locator(", ".join([s for s in direct_connect_selectors if not s.startswith("xpath=")])).first.wait_for(state="visible", timeout=2000)
@@ -1758,6 +1760,10 @@ def run_automation_worker_sync(account_id="default", config=None):
                         ".pvs-profile-actions button:has-text('More')",
                         "main [class*='top-card'] button:has-text('More')",
                         "main [class*='top-card'] .artdeco-button--muted.artdeco-button--icon",
+                        "xpath=//main//button[normalize-space(.)='More']",
+                        "xpath=//main//button[contains(., 'More')]",
+                        "xpath=//main//button[contains(@aria-label, 'More actions')]",
+                        "button:has-text('More')"
                     ]
                     css_more = [s for s in more_selectors if not s.startswith("xpath=")]
                     try:
@@ -1780,8 +1786,9 @@ def run_automation_worker_sync(account_id="default", config=None):
                             acc_state.add_log("CSS selectors missed — using JS smart scan for More/... button...", "info")
                             js_clicked = page.evaluate("""
                                 () => {
-                                    // Get buttons strictly inside the profile card to prevent collisions
-                                    const topCard = document.querySelector('main [class*="top-card"], main section');
+                                    // Get buttons strictly inside the profile card containing the h1 to prevent collisions
+                                    const nameHeader = document.querySelector('main h1');
+                                    const topCard = nameHeader ? (nameHeader.closest('.artdeco-card') || nameHeader.closest('section') || nameHeader.parentElement?.parentElement?.parentElement) : document.querySelector('main [class*="top-card"], main section');
                                     const allBtns = topCard ? Array.from(topCard.querySelectorAll('button')) : Array.from(document.querySelectorAll('main button'));
                                     
                                     // Known action button labels to EXCLUDE
