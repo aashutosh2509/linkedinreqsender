@@ -362,12 +362,16 @@ def check_login_status(page):
         # Use wait_until="commit" with a generous timeout to resolve instantly on server response, 
         # avoiding freezes from assets or trackers that could block domcontentloaded.
         page.goto("https://www.linkedin.com/feed/", wait_until="commit", timeout=30000)
-        time.sleep(4)
+        
+        # Wait up to 15 seconds for automatic sign-in redirect to '/feed' if we are on an intermediate page
+        try:
+            page.wait_for_url("**/feed*", timeout=15000)
+        except Exception:
+            pass
+            
+        time.sleep(2)
         if "login" in page.url or "signup" in page.url or page.locator("a:has-text('Sign in')").is_visible():
             try:
-                screenshot_dir = r"C:\Users\lenovo\.gemini\antigravity\brain\eeb3f292-7445-4086-bb03-812d2a3c527c"
-                os.makedirs(screenshot_dir, exist_ok=True)
-                page.screenshot(path=os.path.join(screenshot_dir, "debug_login_status.png"))
                 public_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
                 page.screenshot(path=os.path.join(public_dir, "debug_login_status.png"))
             except Exception:
@@ -399,7 +403,14 @@ def test_login_session(account_id="default"):
         
         # Navigate to feed to see if we're authenticated (using wait_until="commit" for speed and reliability)
         page.goto("https://www.linkedin.com/feed/", wait_until="commit", timeout=25000)
-        time.sleep(4)
+        
+        # Wait up to 15 seconds for automatic sign-in redirect to '/feed' if we are on an intermediate page
+        try:
+            page.wait_for_url("**/feed*", timeout=15000)
+        except Exception:
+            pass
+            
+        time.sleep(2)
         
         # If we redirect to log in or see sign-in, we are NOT logged in
         if "login" in page.url or "signup" in page.url or page.locator("a:has-text('Sign in')").is_visible():
