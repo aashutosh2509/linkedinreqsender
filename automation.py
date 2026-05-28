@@ -112,34 +112,7 @@ _cached_accounts = []
 
 def load_accounts_registry():
     global _cached_accounts
-    if not os.path.exists(ACCOUNTS_REGISTRY_PATH):
-        # Create a default registry if missing
-        default_acc = {
-            "id": "default",
-            "name": "Primary Account",
-            "proxy": None,
-            "config": {
-                "note_template": "Hi {FirstName}, let's connect!",
-                "send_with_note": False,
-                "delay_min": 30,
-                "delay_max": 70,
-                "daily_limit": 25,
-                "weekly_limit": 150
-            },
-            "status": "Idle",
-            "current_action": "Idle",
-            "progress_percent": 0
-        }
-        try:
-            tmp_path = ACCOUNTS_REGISTRY_PATH + ".tmp"
-            with open(tmp_path, 'w', encoding='utf-8') as f:
-                json.dump([default_acc], f, indent=4)
-            os.replace(tmp_path, ACCOUNTS_REGISTRY_PATH)
-            _cached_accounts = [default_acc]
-            return [default_acc]
-        except Exception:
-            return _cached_accounts
-            
+    
     import time
     for _ in range(10):
         try:
@@ -150,7 +123,39 @@ def load_accounts_registry():
                     return data
         except Exception:
             time.sleep(0.2)
-    return _cached_accounts
+            
+    # If we get here, file reading failed 10 times.
+    # If we already have a cache, return it safely without overwriting.
+    if _cached_accounts:
+        return _cached_accounts
+        
+    # Only if cache is empty AND file is unreadable do we create the default.
+    default_acc = {
+        "id": "default",
+        "name": "Primary Account",
+        "proxy": None,
+        "config": {
+            "note_template": "Hi {FirstName}, let's connect!",
+            "send_with_note": False,
+            "delay_min": 30,
+            "delay_max": 70,
+            "daily_limit": 25,
+            "weekly_limit": 150
+        },
+        "status": "Idle",
+        "current_action": "Idle",
+        "progress_percent": 0
+    }
+    try:
+        tmp_path = ACCOUNTS_REGISTRY_PATH + ".tmp"
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump([default_acc], f, indent=4)
+        os.replace(tmp_path, ACCOUNTS_REGISTRY_PATH)
+        _cached_accounts = [default_acc]
+    except Exception:
+        pass
+        
+    return _cached_accounts or [default_acc]
 
 def save_accounts_registry(accounts):
     try:
@@ -186,11 +191,6 @@ _cached_dbs = {}
 def load_db(account_id="default"):
     global _cached_dbs
     db_path = get_db_path(account_id)
-    if not os.path.exists(db_path):
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        save_db([], account_id)
-        _cached_dbs[account_id] = []
-        return []
         
     import time
     for _ in range(10):
@@ -203,6 +203,18 @@ def load_db(account_id="default"):
         except Exception:
             time.sleep(0.2)
             
+    # If reading failed 10 times but we have a cache, use it
+    if account_id in _cached_dbs and _cached_dbs[account_id]:
+        return _cached_dbs[account_id]
+        
+    # If no cache and file is unreadable, create default empty DB
+    try:
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        save_db([], account_id)
+        _cached_dbs[account_id] = []
+    except Exception:
+        pass
+        
     acc_state = get_account_state(account_id)
     acc_state.add_log("Error loading database after retries, using cache", "error")
     return _cached_dbs.get(account_id, [])
