@@ -313,16 +313,22 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
             viewport={"width": 1280, "height": 800},
             proxy=pw_proxy,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            ignore_default_args=["--enable-automation"],
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox"
             ]
         )
     except Exception as e:
-        acc_state.add_log(f"Browser launch failed (cache corrupted): {str(e)}. Self-healing by wiping profile cache...", "warning")
-        import shutil
-        shutil.rmtree(user_data_dir, ignore_errors=True)
-        # Try launching again after wiping the corrupted cache
+        acc_state.add_log(f"Browser launch failed: {str(e)}. Attempting to unlock profile cache...", "warning")
+        import os
+        lock_path = os.path.join(user_data_dir, "SingletonLock")
+        if os.path.exists(lock_path):
+            try:
+                os.remove(lock_path)
+            except:
+                pass
+        # Try launching again after unlocking the cache
         context = pw.chromium.launch_persistent_context(
             user_data_dir=user_data_dir,
             executable_path=executable_path,
@@ -330,6 +336,7 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
             viewport={"width": 1280, "height": 800},
             proxy=pw_proxy,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            ignore_default_args=["--enable-automation"],
             args=[
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox"
@@ -1494,11 +1501,7 @@ def run_automation_worker_sync(account_id="default", config=None):
             profile_url = contact.get("profile_url", "").strip()
             contact_name = contact.get("name", "")
             
-            # Strict skip rule for Harshit Saxena (Never touch under any automation worker context)
-            if "harshit" in contact_name.lower() or "saxena" in contact_name.lower() or "harshit-saxena" in profile_url.lower():
-                acc_state.add_log(f"[SKIP] Excluding Harshit Saxena from automation actions as requested.", "info")
-                continue
-                
+            
             if not profile_url:
                 contact["status"] = "Failed"
                 contact["logs"] = "Empty profile URL"
@@ -1568,11 +1571,11 @@ def run_automation_worker_sync(account_id="default", config=None):
                 
                 HEADER_ANCHOR = "xpath=//main//*[self::section or contains(@class, 'card') or contains(@class, 'top-card')][.//h1][1]"
                 
-                # Robust JS-based connection status checker (scoped to profile top card & degree-aware)
+                # Robust JS-based connection status checker (scoped strictly to profile top card section & degree-aware)
                 status_result = page.evaluate("""
                     () => {
-                        const nameHeader = document.querySelector('main h1');
-                        const topCard = nameHeader ? (nameHeader.closest('.artdeco-card') || nameHeader.closest('section') || nameHeader.parentElement?.parentElement?.parentElement || document) : (document.querySelector('main section') || document);
+                        // Scope STRICTLY to the first section of main to completely exclude sidebar elements (recommending other profiles)
+                        const topCard = document.querySelector('main section') || document.querySelector('main [class*="top-card"]') || document;
                         
                         const actions = Array.from(topCard.querySelectorAll('button, a'));
                         
@@ -1690,7 +1693,7 @@ def run_automation_worker_sync(account_id="default", config=None):
                     continue
 
                 clicked_connect = False
-                state.add_log("Primary strategy: Searching for direct 'Connect' button on the profile header...", "info")
+                acc_state.add_log("Primary strategy: Searching for direct 'Connect' button on the profile header...", "info")
                 connect_button = None
                 direct_connect_selectors = [
                     f"{HEADER_ANCHOR}//button[contains(., 'Connect')]",
@@ -1715,7 +1718,11 @@ def run_automation_worker_sync(account_id="default", config=None):
                         
                 if connect_button:
                     acc_state.add_log("Found direct 'Connect' button on header. Clicking...", "info")
-                    connect_button.click(force=True)
+                    try:
+                        connect_button.evaluate("el => el.click()")
+                    except Exception as js_err:
+                        acc_state.add_log(f"Playwright locator.evaluate direct click failed: {js_err}. Trying fallback locator click...", "warning")
+                        connect_button.click(force=True)
                     clicked_connect = True
                 else:
                     acc_state.add_log("Direct 'Connect' button not visible or disabled on header.", "info")
@@ -1724,7 +1731,7 @@ def run_automation_worker_sync(account_id="default", config=None):
                     acc_state.add_log("Fallback: Looking for 'More' or '...' dropdown button...", "info")
                     more_button = None
 
-                    # --- STRATEGY 1: Try standard CSS/aria-label selectors ---
+                    # --- STRATEGY 1: Try standard CSS/aria-label selectors (strictly scoped to top card section) ---
                     more_selectors = [
                         # Strict XPath selectors inside the profile's top card
                         f"{HEADER_ANCHOR}//button[@aria-label='More actions']",
@@ -1735,6 +1742,12 @@ def run_automation_worker_sync(account_id="default", config=None):
                         f"{HEADER_ANCHOR}//button[contains(., 'more')]",
                         
                         # Strict CSS selectors inside the profile top card
+                        "main section:first-of-type button[aria-label='More actions']",
+                        "main section:first-of-type button[aria-label='See more actions']",
+                        "main section:first-of-type button[aria-label*='More']",
+                        "main section:first-of-type button[aria-label*='more']",
+                        "main section:first-of-type button:has-text('More')",
+                        "main section:first-of-type button[aria-expanded]",
                         "main [class*='top-card'] button[aria-label='More actions']",
                         "main [class*='top-card'] button[aria-label='See more actions']",
                         "main [class*='top-card'] button[aria-label*='More']",
@@ -1742,10 +1755,9 @@ def run_automation_worker_sync(account_id="default", config=None):
                         ".pvs-profile-actions button:has-text('More')",
                         "main [class*='top-card'] button:has-text('More')",
                         "main [class*='top-card'] .artdeco-button--muted.artdeco-button--icon",
-                        "xpath=//main//button[normalize-space(.)='More']",
-                        "xpath=//main//button[contains(., 'More')]",
-                        "xpath=//main//button[contains(@aria-label, 'More actions')]",
-                        "button:has-text('More')"
+                        "xpath=//main//section[1]//button[normalize-space(.)='More']",
+                        "xpath=//main//section[1]//button[contains(., 'More')]",
+                        "xpath=//main//section[1]//button[contains(@aria-label, 'More actions')]"
                     ]
                     css_more = [s for s in more_selectors if not s.startswith("xpath=")]
                     try:
@@ -1768,10 +1780,9 @@ def run_automation_worker_sync(account_id="default", config=None):
                             acc_state.add_log("CSS selectors missed — using JS smart scan for More/... button...", "info")
                             js_clicked = page.evaluate("""
                                 () => {
-                                    // Get buttons strictly inside the profile card containing the h1 to prevent collisions
-                                    const nameHeader = document.querySelector('main h1');
-                                    const topCard = nameHeader ? (nameHeader.closest('.artdeco-card') || nameHeader.closest('section') || nameHeader.parentElement?.parentElement?.parentElement) : document.querySelector('main [class*="top-card"], main section');
-                                    const allBtns = topCard ? Array.from(topCard.querySelectorAll('button')) : Array.from(document.querySelectorAll('main button'));
+                                    // Get buttons strictly inside the profile's first top card section to prevent collisions
+                                    const topCard = document.querySelector('main section') || document.querySelector('main [class*="top-card"]') || document.querySelector('main');
+                                    const allBtns = topCard ? Array.from(topCard.querySelectorAll('button')) : [];
                                     
                                     // Known action button labels to EXCLUDE
                                     const excludeWords = ['message', 'follow', 'connect', 'endorse', 'hire', 'save'];
@@ -1811,7 +1822,77 @@ def run_automation_worker_sync(account_id="default", config=None):
 
                     if more_button:
                         if more_button is not True:
-                            more_button.click(force=True)
+                            try:
+                                more_button.evaluate("el => el.click()")
+                            except Exception as js_err:
+                                acc_state.add_log(f"Playwright locator.evaluate click on More button failed: {js_err}. Trying fallback locator click...", "warning")
+                                more_button.click(force=True)
+                            acc_state.add_log("Clicked More/... button. Waiting for dropdown...", "info")
+                            time.sleep(random.uniform(2.0, 3.0))
+
+                        dropdown_connect = None
+                        # Broader set of selectors for Connect inside LinkedIn's More dropdown
+                        dropdown_connect_selectors = [
+                            # CSS exact text matches (100% safe from 'Remove connection')
+                            "[role='menuitem'] span:text-is('Connect')",
+                            "[role='menuitem'] button:text-is('Connect')",
+                            "[role='menuitem']:text-is('Connect')",
+                            # XPath exact match or exclusions to prevent false positive matching of 'Remove connection'
+                            "xpath=//*[@role='menuitem'][normalize-space(.)='Connect']",
+                            "xpath=//*[@role='menuitem']//*[normalize-space(.)='Connect']",
+                            "xpath=//*[@role='menuitem'][contains(normalize-space(.), 'Connect') and not(contains(normalize-space(.), 'Remove')) and not(contains(normalize-space(.), 'connection'))]",
+                            "xpath=//*[contains(@class,'artdeco-dropdown')]//*[normalize-space(text())='Connect']",
+                        ]
+                        
+                        # Wait up to 3s for dropdown Connect to appear
+                        css_dropdown = [s for s in dropdown_connect_selectors if not s.startswith("xpath=")]
+                        try:
+                            page.locator(", ".join(css_dropdown)).first.wait_for(state="visible", timeout=3000)
+                        except:
+                            pass
+
+                        for selector in dropdown_connect_selectors:
+                            try:
+                                btn = page.locator(selector).first
+                                if btn.is_visible():
+                                    dropdown_connect = btn
+                                    acc_state.add_log(f"Found 'Connect' in dropdown via: {selector}", "info")
+                                    break
+                            except:
+                                pass
+                        
+                        # Last resort: find via JS evaluation inside the dropdown
+                        if not dropdown_connect:
+                            try:
+                                acc_state.add_log("Trying JS-based Connect search inside dropdown...", "info")
+                                js_clicked = page.evaluate("""
+                                    () => {
+                                        const items = document.querySelectorAll('[role="menuitem"], .artdeco-dropdown__item');
+                                        for (const item of items) {
+                                            if (item.innerText && item.innerText.trim() === 'Connect') {
+                                                item.click();
+                                                return true;
+                                            }
+                                        }
+                                        return false;
+                                    }
+                                """)
+                                if js_clicked:
+                                    acc_state.add_log("JS-based click on 'Connect' in dropdown succeeded.", "success")
+                                    clicked_connect = True
+                            except Exception as js_err:
+                                acc_state.add_log(f"JS dropdown click failed: {js_err}", "warning")
+                                
+                    # Tracking failure reasons for detailed database and dashboard logs
+                    detailed_fail_reason = "Connect option not visible or disabled on header."
+                    
+                    if more_button:
+                        if more_button is not True:
+                            try:
+                                more_button.evaluate("el => el.click()")
+                            except Exception as js_err:
+                                acc_state.add_log(f"Playwright locator.evaluate click on More button failed: {js_err}. Trying fallback locator click...", "warning")
+                                more_button.click(force=True)
                             acc_state.add_log("Clicked More/... button. Waiting for dropdown...", "info")
                             time.sleep(random.uniform(2.0, 3.0))
 
@@ -1870,10 +1951,15 @@ def run_automation_worker_sync(account_id="default", config=None):
                                 
                         if dropdown_connect and not clicked_connect:
                             acc_state.add_log("Clicking 'Connect' in the 'More' dropdown menu...", "info")
-                            dropdown_connect.click(force=True)
+                            try:
+                                dropdown_connect.evaluate("el => el.click()")
+                            except Exception as js_err:
+                                acc_state.add_log(f"Playwright locator.evaluate click on dropdown Connect failed: {js_err}. Trying fallback locator click...", "warning")
+                                dropdown_connect.click(force=True)
                             clicked_connect = True
                         elif not clicked_connect:
                             acc_state.add_log("Could not find 'Connect' in the 'More' dropdown. Taking screenshot for debug...", "warning")
+                            detailed_fail_reason = "Connect option not found inside the 'More' dropdown menu (profile may have connection limits or require email verification)."
                             try:
                                 screenshot_dir = r"C:\Users\lenovo\.gemini\antigravity\brain\eeb3f292-7445-4086-bb03-812d2a3c527c"
                                 os.makedirs(screenshot_dir, exist_ok=True)
@@ -1887,6 +1973,7 @@ def run_automation_worker_sync(account_id="default", config=None):
                                 pass
                     else:
                         acc_state.add_log("Could not find 'More' button on this profile.", "warning")
+                        detailed_fail_reason = "Could not locate 'More' or '...' actions dropdown button on profile card."
                                 
                 if not clicked_connect:
                     acc_state.add_log(f"Skipping {contact.get('name', 'Contact')}: Connect action not available. Capturing debug screenshot...", "warning")
@@ -1897,12 +1984,12 @@ def run_automation_worker_sync(account_id="default", config=None):
                     except:
                         pass
                     contact["status"] = "Failed"
-                    contact["logs"] = "Connect button not found or disabled"
+                    contact["logs"] = detailed_fail_reason
                     db_data_fresh = load_db(account_id)
                     for d in db_data_fresh:
                         if d["profile_url"] == profile_url:
                             d["status"] = "Failed"
-                            d["logs"] = "Connect button not found or disabled"
+                            d["logs"] = detailed_fail_reason
                     save_db(db_data_fresh, account_id)
                     continue
 
