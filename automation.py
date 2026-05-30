@@ -321,7 +321,6 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
         )
     except Exception as e:
         acc_state.add_log(f"Browser launch failed: {str(e)}. Attempting to unlock profile cache...", "warning")
-        import os
         lock_path = os.path.join(user_data_dir, "SingletonLock")
         if os.path.exists(lock_path):
             try:
@@ -1195,8 +1194,7 @@ def sync_acceptance_task_sync(account_id="default"):
         for scroll_step in range(1, max_scroll_steps + 1):
             if acc_state.stop_requested:
                 break
-            links = page.locator("a").all()
-            in_links = [l.get_attribute("href") for l in links if l.get_attribute("href") and "/in/" in l.get_attribute("href")]
+            in_links = page.evaluate("Array.from(document.querySelectorAll('a')).map(a => a.href).filter(h => h && h.includes('/in/'))")
             current_count = len(in_links)
             
             withdraw_anchors = page.locator("a:has-text('Withdraw')").all()
@@ -1226,15 +1224,13 @@ def sync_acceptance_task_sync(account_id="default"):
             last_count = current_count
             
         pending_usernames = set()
-        links = page.locator("a").all()
-        for link in links:
+        hrefs = page.evaluate("Array.from(document.querySelectorAll('a')).map(a => a.href).filter(h => h && h.includes('/in/'))")
+        for href in hrefs:
             try:
-                href = link.get_attribute("href")
-                if href and "/in/" in href:
-                    url_clean = href.split("?")[0].rstrip("/")
-                    username = url_clean.split("/in/")[-1].strip()
-                    if username:
-                        pending_usernames.add(username)
+                url_clean = href.split("?")[0].rstrip("/")
+                username = url_clean.split("/in/")[-1].strip()
+                if username:
+                    pending_usernames.add(username)
             except Exception:
                 continue
                 
@@ -1689,6 +1685,9 @@ def run_automation_worker_sync(account_id="default", config=None):
                     for d in db_data_fresh:
                         if d["profile_url"] == profile_url:
                             d["status"] = "Pending"
+                            if not d.get("date_sent"):
+                                d["date_sent"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                contact["date_sent"] = d["date_sent"]
                     save_db(db_data_fresh, account_id)
                     continue
 
@@ -1699,8 +1698,7 @@ def run_automation_worker_sync(account_id="default", config=None):
                     f"{HEADER_ANCHOR}//button[contains(., 'Connect')]",
                     f"{HEADER_ANCHOR}//*[text()='Connect']",
                     "main [class*='top-card'] button:has-text('Connect')",
-                    "xpath=//main//button[contains(., 'Connect') and not(contains(@aria-label, 'Remove'))]",
-                    "button:has-text('Connect')"
+                    "xpath=//main//button[contains(., 'Connect') and not(contains(@aria-label, 'Remove'))]"
                 ]
                 try:
                     page.locator(", ".join([s for s in direct_connect_selectors if not s.startswith("xpath=")])).first.wait_for(state="visible", timeout=2000)
@@ -1725,7 +1723,35 @@ def run_automation_worker_sync(account_id="default", config=None):
                         connect_button.click(force=True)
                     clicked_connect = True
                 else:
-                    acc_state.add_log("Direct 'Connect' button not visible or disabled on header.", "info")
+                    acc_state.add_log("Direct 'Connect' button not found via standard selectors. Trying JS-based deep search...", "info")
+                    try:
+                        js_clicked = page.evaluate("""
+                            () => {
+                                const topCard = document.querySelector('main section') || document.querySelector('main [class*="top-card"]') || document.querySelector('main');
+                                if (!topCard) return false;
+                                
+                                const btns = Array.from(topCard.querySelectorAll('button, a'));
+                                for (const btn of btns) {
+                                    if (!btn.offsetHeight && !btn.offsetWidth) continue;
+                                    const text = btn.textContent.trim().toLowerCase();
+                                    const label = (btn.getAttribute('aria-label') || '').toLowerCase();
+                                    
+                                    if ((text === 'connect' || (label.includes('invite') && label.includes('connect'))) && !text.includes('remove') && !label.includes('remove')) {
+                                        btn.click();
+                                        return true;
+                                    }
+                                }
+                                return false;
+                            }
+                        """)
+                        if js_clicked:
+                            acc_state.add_log("JS-based direct click on 'Connect' succeeded.", "success")
+                            clicked_connect = True
+                        else:
+                            acc_state.add_log("Direct 'Connect' button not visible or disabled on header.", "info")
+                    except Exception as e:
+                        acc_state.add_log(f"JS-based direct click failed: {e}", "warning")
+                        acc_state.add_log("Direct 'Connect' button not visible or disabled on header.", "info")
                     
                 if not clicked_connect:
                     acc_state.add_log("Fallback: Looking for 'More' or '...' dropdown button...", "info")
@@ -1820,69 +1846,6 @@ def run_automation_worker_sync(account_id="default", config=None):
                         except Exception as e:
                             acc_state.add_log(f"JS More button scan error: {e}", "warning")
 
-                    if more_button:
-                        if more_button is not True:
-                            try:
-                                more_button.evaluate("el => el.click()")
-                            except Exception as js_err:
-                                acc_state.add_log(f"Playwright locator.evaluate click on More button failed: {js_err}. Trying fallback locator click...", "warning")
-                                more_button.click(force=True)
-                            acc_state.add_log("Clicked More/... button. Waiting for dropdown...", "info")
-                            time.sleep(random.uniform(2.0, 3.0))
-
-                        dropdown_connect = None
-                        # Broader set of selectors for Connect inside LinkedIn's More dropdown
-                        dropdown_connect_selectors = [
-                            # CSS exact text matches (100% safe from 'Remove connection')
-                            "[role='menuitem'] span:text-is('Connect')",
-                            "[role='menuitem'] button:text-is('Connect')",
-                            "[role='menuitem']:text-is('Connect')",
-                            # XPath exact match or exclusions to prevent false positive matching of 'Remove connection'
-                            "xpath=//*[@role='menuitem'][normalize-space(.)='Connect']",
-                            "xpath=//*[@role='menuitem']//*[normalize-space(.)='Connect']",
-                            "xpath=//*[@role='menuitem'][contains(normalize-space(.), 'Connect') and not(contains(normalize-space(.), 'Remove')) and not(contains(normalize-space(.), 'connection'))]",
-                            "xpath=//*[contains(@class,'artdeco-dropdown')]//*[normalize-space(text())='Connect']",
-                        ]
-                        
-                        # Wait up to 3s for dropdown Connect to appear
-                        css_dropdown = [s for s in dropdown_connect_selectors if not s.startswith("xpath=")]
-                        try:
-                            page.locator(", ".join(css_dropdown)).first.wait_for(state="visible", timeout=3000)
-                        except:
-                            pass
-
-                        for selector in dropdown_connect_selectors:
-                            try:
-                                btn = page.locator(selector).first
-                                if btn.is_visible():
-                                    dropdown_connect = btn
-                                    acc_state.add_log(f"Found 'Connect' in dropdown via: {selector}", "info")
-                                    break
-                            except:
-                                pass
-                        
-                        # Last resort: find via JS evaluation inside the dropdown
-                        if not dropdown_connect:
-                            try:
-                                acc_state.add_log("Trying JS-based Connect search inside dropdown...", "info")
-                                js_clicked = page.evaluate("""
-                                    () => {
-                                        const items = document.querySelectorAll('[role="menuitem"], .artdeco-dropdown__item');
-                                        for (const item of items) {
-                                            if (item.innerText && item.innerText.trim() === 'Connect') {
-                                                item.click();
-                                                return true;
-                                            }
-                                        }
-                                        return false;
-                                    }
-                                """)
-                                if js_clicked:
-                                    acc_state.add_log("JS-based click on 'Connect' in dropdown succeeded.", "success")
-                                    clicked_connect = True
-                            except Exception as js_err:
-                                acc_state.add_log(f"JS dropdown click failed: {js_err}", "warning")
-                                
                     # Tracking failure reasons for detailed database and dashboard logs
                     detailed_fail_reason = "Connect option not visible or disabled on header."
                     
@@ -1935,9 +1898,13 @@ def run_automation_worker_sync(account_id="default", config=None):
                                     () => {
                                         const items = document.querySelectorAll('[role="menuitem"], .artdeco-dropdown__item');
                                         for (const item of items) {
-                                            if (item.innerText && item.innerText.trim() === 'Connect') {
-                                                item.click();
-                                                return true;
+                                            const text = (item.innerText || item.textContent || '').trim().toLowerCase();
+                                            if (text === 'connect' && !text.includes('remove')) {
+                                                const btn = item.closest('button') || item.querySelector('button') || item.closest('div[role="button"]') || item;
+                                                if (btn && btn.offsetHeight > 0) {
+                                                    btn.click();
+                                                    return true;
+                                                }
                                             }
                                         }
                                         return false;
@@ -2091,6 +2058,53 @@ def run_automation_worker_sync(account_id="default", config=None):
                                 acc_state.add_log("Connection request sent!", "success")
                             else:
                                 raise Exception("Send buttons not found or disabled in modal")
+
+                if clicked_connect:
+                    acc_state.add_log("Verifying if the connection request was actually sent...", "info")
+                    time.sleep(2.5) # Allow UI to settle
+                    
+                    # Re-evaluate JS to check if status is now Pending
+                    verify_status_result = page.evaluate("""
+                        () => {
+                            const topCard = document.querySelector('main section') || document.querySelector('main [class*="top-card"]') || document.querySelector('main');
+                            
+                            // Check for success toast notification as a definitive fallback
+                            const toasts = Array.from(document.querySelectorAll('.artdeco-toast-item'));
+                            const hasToast = toasts.some(t => {
+                                const text = t.textContent.toLowerCase();
+                                return text.includes('sent') || text.includes('invitation');
+                            });
+                            if (hasToast) return { status: "Pending" };
+                            
+                            if (!topCard) return { status: "Unknown" };
+                            
+                            const actions = Array.from(topCard.querySelectorAll('button, a'));
+                            const hasPending = actions.some(el => {
+                                // We DO NOT check offsetHeight here because the "Pending" button 
+                                // might be hidden inside the closed "More" dropdown!
+                                const text = el.textContent.trim().toLowerCase();
+                                const label = (el.getAttribute('aria-label') || '').toLowerCase();
+                                
+                                if (text === 'pending' || text === 'sent' || label.includes('pending') || label.includes('sent connection')) {
+                                    return true;
+                                }
+                                if (text.includes('pending') || text.includes('invitation sent') || text.includes('request sent')) {
+                                    return true;
+                                }
+                                return false;
+                            });
+                            
+                            if (hasPending) {
+                                return { status: "Pending" };
+                            }
+                            return { status: "Not Sent" };
+                        }
+                    """)
+                    if verify_status_result.get("status") != "Pending":
+                        acc_state.add_log("Verification failed: The 'Connect' button did not change to 'Pending'. The request was NOT actually sent.", "error")
+                        raise Exception("Failed to send request. LinkedIn blocked it or button not found.")
+                    else:
+                        acc_state.add_log("Verification passed: Profile now shows as 'Pending'.", "success")
 
                 # Success
                 sent_today_count += 1

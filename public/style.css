@@ -285,6 +285,7 @@ body {
 .logo-text h1 span {
     background: linear-gradient(to right, var(--accent-purple), var(--accent-blue));
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
