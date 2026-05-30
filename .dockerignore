@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+*.log
+*.env
+venv/
+venv*/
+.env/
+.git/
+.gitignore
+node_modules/
+linkedin_user_data/
+linkedin_user_data - Copy/
+accounts_db/
+uploads/
+**/dist/
+**/build/
+**/__pycache__/
+**/*.pytest_cache
