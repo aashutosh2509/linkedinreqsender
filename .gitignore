@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+scratch/
+linkedin_user_data/
+linkedin_user_data - Copy/
+accounts_db/
+uploads/
+uploads - Copy/
+*.json
+!sync_config.json
+*.xlsx
+* - Copy.*
