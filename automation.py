@@ -312,7 +312,6 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
             headless=not headed,
             viewport={"width": 1280, "height": 800},
             proxy=pw_proxy,
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             ignore_default_args=["--enable-automation"],
             args=[
                 "--disable-blink-features=AutomationControlled",
@@ -334,7 +333,6 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
             headless=not headed,
             viewport={"width": 1280, "height": 800},
             proxy=pw_proxy,
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             ignore_default_args=["--enable-automation"],
             args=[
                 "--disable-blink-features=AutomationControlled",
