@@ -128,6 +128,7 @@ const customEndDateInput = document.getElementById("custom-end-date");
 const btnApplyDate = document.getElementById("btn-apply-date");
 const btnClearDate = document.getElementById("btn-clear-date");
 const btnResetContacts = document.getElementById("btn-reset-contacts");
+const btnDownloadContacts = document.getElementById("btn-download-contacts");
 const btnAdminClearDb = document.getElementById("btn-admin-clear-db");
 const tableBody = document.getElementById("table-body");
 
@@ -250,6 +251,7 @@ function setupEventListeners() {
     
     // Database modifications
     btnResetContacts.addEventListener("click", resetProspectsStatus);
+    if (btnDownloadContacts) btnDownloadContacts.addEventListener("click", downloadContacts);
     if (btnAdminClearDb) btnAdminClearDb.addEventListener("click", adminClearDatabases);
     
     // Prospect search & filter events
@@ -1931,6 +1933,7 @@ function renderWorkspaceTable() {
             </tr>
         `;
         lucide.createIcons();
+        lastContactsTableHtmlCache = "";
         return;
     }
     
@@ -2250,4 +2253,10 @@ async function saveAccountsOrderToServer(orderList) {
     } catch (e) {
         console.error("Failed persisting manual shuffle sequence to backend:", e);
     }
+}
+
+async function downloadContacts() {
+    if (currentAccountId === "admin") return;
+    const status = statusFilterSelect ? statusFilterSelect.value : "all";
+    window.location.href = `${API_BASE}/export?account_id=${currentAccountId}&status=${status}`;
 }

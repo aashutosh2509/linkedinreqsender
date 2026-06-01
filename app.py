@@ -544,6 +544,48 @@ def reset_contacts():
     acc_state.add_log(f"Reset {reset_count} contact(s) back to 'Not Started' ({scope} scope).", "info")
     return jsonify({"status": "success", "message": f"Successfully reset {reset_count} contacts.", "reset_count": reset_count})
 
+# API - Export contacts
+@app.route("/api/export", methods=["GET"])
+def export_contacts():
+    import csv
+    import io
+    from flask import Response
+    
+    acc_id = request.args.get("account_id", "default")
+    status = request.args.get("status", "all")
+    
+    db_data = load_db(acc_id)
+    
+    if status and status != "all":
+        db_data = [c for c in db_data if c.get("status") == status]
+        
+    si = io.StringIO()
+    cw = csv.writer(si)
+    cw.writerow(["Name", "First Name", "Last Name", "Profile URL", "Company", "Title", "Status", "Date Sent", "Date Accepted", "Email", "Phone", "Logs"])
+    
+    for c in db_data:
+        cw.writerow([
+            c.get("name", ""),
+            c.get("first_name", ""),
+            c.get("last_name", ""),
+            c.get("profile_url", ""),
+            c.get("company", ""),
+            c.get("title", ""),
+            c.get("status", ""),
+            c.get("date_sent", "") or "",
+            c.get("date_accepted", "") or "",
+            c.get("email", "") or "",
+            c.get("phone", "") or "",
+            c.get("logs", "") or ""
+        ])
+        
+    output = si.getvalue()
+    return Response(
+        output,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment;filename=contacts_{acc_id}_{status}.csv"}
+    )
+
 @app.route("/api/launch-login", methods=["POST"])
 def launch_login():
     req_data = request.json or {}
