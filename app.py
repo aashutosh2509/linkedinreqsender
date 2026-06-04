@@ -5,6 +5,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import openpyxl
+import time
 
 import automation
 from automation import (
@@ -16,6 +17,7 @@ from automation import (
     save_db,
     open_linkedin_for_login,
     run_automation_worker,
+    run_automation_worker_sync,
     sync_acceptance_task,
     queue_runner,
     BROWSERS_PATH
@@ -173,13 +175,18 @@ def get_accounts():
                 except:
                     pass
         
+        date_filtered_contacts = list(filtered_contacts)
+        
         if status and status != "all":
             filtered_contacts = [c for c in filtered_contacts if c.get("status") == status]
             
-        connected_count = sum(1 for c in filtered_contacts if c.get("status") == "Connected")
+        all_connected = sum(1 for c in filtered_contacts if c.get("status") == "Connected")
+        
+        bot_connected = sum(1 for c in filtered_contacts if c.get("status") == "Connected" and c.get("date_sent"))
         pending_count = sum(1 for c in filtered_contacts if c.get("status") == "Pending")
-        failed_count = sum(1 for c in filtered_contacts if c.get("status") == "Failed")
-        sent_total = sum(1 for c in filtered_contacts if c.get("status") in ["Pending", "Connected"])
+        
+        failed_count = sum(1 for c in filtered_contacts if c.get("status") == "Failed" and c.get("date_sent"))
+        sent_total = sum(1 for c in filtered_contacts if c.get("status") in ["Pending", "Connected"] and c.get("date_sent"))
         
         # Calculate active days from date_sent
         days_active = set()
@@ -194,12 +201,13 @@ def get_accounts():
         acc["stats"] = {
             "total": len(filtered_contacts),
             "sent": sent_total,
-            "connected": connected_count,
+            "connected": all_connected,
+            "bot_connected": bot_connected,
             "pending": pending_count,
             "failed": failed_count,
             "active_days_count": len(days_active) or 1,
             "avg_sent_per_day": round(sent_total / (len(days_active) or 1), 1),
-            "acceptance_rate": round((connected_count / (connected_count + pending_count) * 100), 1) if (connected_count + pending_count) > 0 else 0.0
+            "acceptance_rate": round((all_connected / (all_connected + pending_count) * 100), 1) if (all_connected + pending_count) > 0 else 0.0
         }
     return jsonify(accounts)
 
@@ -455,6 +463,7 @@ def add_contact():
         "date_accepted": None,
         "email": None,
         "phone": None,
+        "dob": None,
         "logs": None
     }
     
@@ -529,6 +538,7 @@ def reset_contacts():
             contact["date_accepted"] = None
             contact["email"] = None
             contact["phone"] = None
+            contact["dob"] = None
             contact["logs"] = None
             reset_count += 1
         elif scope == "failed" and status == "Failed":
@@ -543,6 +553,49 @@ def reset_contacts():
     save_db(db_data, acc_id)
     acc_state.add_log(f"Reset {reset_count} contact(s) back to 'Not Started' ({scope} scope).", "info")
     return jsonify({"status": "success", "message": f"Successfully reset {reset_count} contacts.", "reset_count": reset_count})
+
+# API - Export contacts
+@app.route("/api/export", methods=["GET"])
+def export_contacts():
+    import csv
+    import io
+    from flask import Response
+    
+    acc_id = request.args.get("account_id", "default")
+    status = request.args.get("status", "all")
+    
+    db_data = load_db(acc_id)
+    
+    if status and status != "all":
+        db_data = [c for c in db_data if c.get("status") == status]
+        
+    si = io.StringIO()
+    cw = csv.writer(si)
+    cw.writerow(["Name", "First Name", "Last Name", "Profile URL", "Company", "Title", "Status", "Date Sent", "Date Accepted", "Email", "Phone", "DOB", "Logs"])
+    
+    for c in db_data:
+        cw.writerow([
+            c.get("name", ""),
+            c.get("first_name", ""),
+            c.get("last_name", ""),
+            c.get("profile_url", ""),
+            c.get("company", ""),
+            c.get("title", ""),
+            c.get("status", ""),
+            c.get("date_sent", "") or "",
+            c.get("date_accepted", "") or "",
+            c.get("email", "") or "",
+            c.get("phone", "") or "",
+            c.get("dob", "") or "",
+            c.get("logs", "") or ""
+        ])
+        
+    output = si.getvalue()
+    return Response(
+        output,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment;filename=contacts_{acc_id}_{status}.csv"}
+    )
 
 @app.route("/api/launch-login", methods=["POST"])
 def launch_login():
@@ -716,9 +769,63 @@ def start_automation():
         end_index=end_index,
         account_id=acc_id
     )
-    return jsonify({"status": "success", "message": "Account added to automation queue."})
+    return jsonify({"status": "success", "message": "Automation started"})
 
-# API - Stop/Pause automation
+def run_bulk_automation_in_thread(configs):
+    for config in configs:
+        acc_id = config.get("account_id", "default")
+        acc_state = get_account_state(acc_id)
+        
+        if acc_state.is_running:
+            continue
+            
+        note_template = config.get("note_template", "Hi {FirstName}, let's connect!")
+        send_with_note = config.get("send_with_note", False)
+        delay_min = int(config.get("delay_min", 30))
+        delay_max = int(config.get("delay_max", 70))
+        daily_limit = int(config.get("daily_limit", 25))
+        weekly_limit = int(config.get("weekly_limit", 150))
+        start_index = config.get("start_index")
+        end_index = config.get("end_index")
+        
+        if delay_min < 10:
+            delay_min = 10
+        if delay_max < delay_min:
+            delay_max = delay_min + 5
+            
+        try:
+            run_automation_worker_sync(
+                account_id=acc_id,
+                config={
+                    "note_template": note_template,
+                    "send_with_note": send_with_note,
+                    "delay_min": delay_min,
+                    "delay_max": delay_max,
+                    "daily_limit": daily_limit,
+                    "weekly_limit": weekly_limit,
+                    "start_index": start_index,
+                    "end_index": end_index
+                }
+            )
+        except Exception as e:
+            acc_state.add_log(f"Bulk sequential run failed for this account: {str(e)}", "error")
+            
+        # Wait a bit between accounts to ensure clean browser shutdown
+        time.sleep(5)
+
+@app.route("/api/start_bulk", methods=["POST"])
+def start_bulk_automation():
+    configs = request.json or []
+    if not isinstance(configs, list) or len(configs) == 0:
+        return err_response("Invalid configuration list provided.")
+        
+    thread = threading.Thread(target=run_bulk_automation_in_thread, args=(configs,))
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({"status": "success", "message": "Sequential bulk automation started"})
+
+# API - Stop connection automation
 @app.route("/api/stop", methods=["POST"])
 def stop_automation():
     req_data = request.json or {}

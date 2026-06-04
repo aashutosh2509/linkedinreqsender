@@ -107,6 +107,9 @@ const statPending = document.getElementById("stat-pending");
 const statConnected = document.getElementById("stat-connected");
 const statAvgDay = document.getElementById("stat-avg-day");
 const statAcceptRate = document.getElementById("stat-accept-rate");
+
+const statNotStarted = document.getElementById("stat-not-started");
+
 const acceptRateBar = document.getElementById("accept-rate-bar");
 
 // Safe Quotas
@@ -128,6 +131,7 @@ const customEndDateInput = document.getElementById("custom-end-date");
 const btnApplyDate = document.getElementById("btn-apply-date");
 const btnClearDate = document.getElementById("btn-clear-date");
 const btnResetContacts = document.getElementById("btn-reset-contacts");
+const btnDownloadContacts = document.getElementById("btn-download-contacts");
 const btnAdminClearDb = document.getElementById("btn-admin-clear-db");
 const tableBody = document.getElementById("table-body");
 
@@ -250,6 +254,7 @@ function setupEventListeners() {
     
     // Database modifications
     btnResetContacts.addEventListener("click", resetProspectsStatus);
+    if (btnDownloadContacts) btnDownloadContacts.addEventListener("click", downloadContacts);
     if (btnAdminClearDb) btnAdminClearDb.addEventListener("click", adminClearDatabases);
     
     // Prospect search & filter events
@@ -790,6 +795,7 @@ function renderAdminDashboardView() {
     let totalSent = 0;
     let totalPending = 0;
     let totalConnected = 0;
+    let totalBotConnected = 0;
     let totalActiveDays = 0;
     
     // Compute aggregations across all registry items
@@ -799,6 +805,7 @@ function renderAdminDashboardView() {
         totalSent += s.sent || 0;
         totalPending += s.pending || 0;
         totalConnected += s.connected || 0;
+        totalBotConnected += s.bot_connected || 0;
         totalActiveDays += s.active_days_count || 1;
     });
     
@@ -812,7 +819,7 @@ function renderAdminDashboardView() {
     const avgDayNumEl = adminStatAvgDay.childNodes[0];
     if (avgDayNumEl) avgDayNumEl.textContent = avgSentDay;
     
-    const acceptRate = totalSent > 0 ? Math.round((totalConnected / totalSent) * 100) : 0;
+    const acceptRate = (totalConnected + totalPending) > 0 ? Math.round((totalConnected / (totalConnected + totalPending)) * 100) : 0;
     const acceptRateNumEl = adminStatAcceptRate.childNodes[0];
     if (acceptRateNumEl) acceptRateNumEl.textContent = acceptRate;
     
@@ -1091,6 +1098,7 @@ async function runSelectedSequentially() {
     let successCount = 0;
     let failCount = 0;
     
+    const bulkPayload = [];
     for (const accountId of selectedIds) {
         const acc = accountsRegistry.find(a => a.id === accountId);
         if (!acc) {
@@ -1099,7 +1107,7 @@ async function runSelectedSequentially() {
         }
         
         const cfg = acc.config || {};
-        const payload = {
+        bulkPayload.push({
             account_id: accountId,
             note_template: cfg.note_template || "Hi {FirstName}, let's connect!",
             send_with_note: cfg.send_with_note || false,
@@ -1107,24 +1115,25 @@ async function runSelectedSequentially() {
             delay_max: cfg.delay_max || 70,
             daily_limit: cfg.daily_limit || 25,
             weekly_limit: cfg.weekly_limit || 150
-        };
-        
+        });
+    }
+    
+    if (bulkPayload.length > 0) {
         try {
-            const response = await fetch(`${API_BASE}/start`, {
+            const response = await fetch(`${API_BASE}/start_bulk`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(bulkPayload)
             });
             const res = await response.json();
             if (response.ok && res.status === "success") {
-                successCount++;
+                successCount = bulkPayload.length;
             } else {
-                failCount++;
+                failCount += bulkPayload.length;
             }
         } catch (e) {
-            failCount++;
+            failCount += bulkPayload.length;
         }
-        await new Promise(r => setTimeout(r, 200));
     }
     
     selectedAccountIdsForBulk.clear();
@@ -1756,14 +1765,20 @@ function refreshWorkspaceStats(contactsList = currentFilteredContacts) {
     const total = contactsList.length;
     const pending = contactsList.filter(c => c.status === "Pending").length;
     const connected = contactsList.filter(c => c.status === "Connected").length;
+
+    
+    // Calculate Not Started
+    const notStarted = contactsList.filter(c => c.status === "Not Started").length;
     
     // Total requests sent are computed from Sent, Pending, or Connected statuses
-    const sent = contactsList.filter(c => ["Sent", "Pending", "Connected"].includes(c.status)).length;
+    const sent = contactsList.filter(c => ["Sent", "Pending", "Connected"].includes(c.status) && c.date_sent).length;
     
     statTotal.textContent = total;
     statSent.textContent = sent;
     statPending.textContent = pending;
     statConnected.textContent = connected;
+
+    if (statNotStarted) statNotStarted.textContent = notStarted;
     
     // Average Sent/Day calculation
     const sentWithDates = contactsList.filter(c => ["Sent", "Pending", "Connected"].includes(c.status) && c.date_sent);
@@ -1775,7 +1790,7 @@ function refreshWorkspaceStats(contactsList = currentFilteredContacts) {
     if (avgDayNumEl) avgDayNumEl.textContent = avgPerDay;
     
     // Acceptance rate
-    const acceptRate = sent > 0 ? Math.round((connected / sent) * 100) : 0;
+    const acceptRate = (connected + pending) > 0 ? Math.round((connected / (connected + pending)) * 100) : 0;
     const acceptRateNumEl = statAcceptRate.childNodes[0];
     if (acceptRateNumEl) acceptRateNumEl.textContent = acceptRate;
     
@@ -1921,7 +1936,7 @@ function renderWorkspaceTable() {
     if (filtered.length === 0) {
         tableBody.innerHTML = `
             <tr>
-                <td colspan="8" class="empty-table-state">
+                <td colspan="9" class="empty-table-state">
                     <div class="empty-state-content">
                         <i data-lucide="search-code"></i>
                         <p>${localContacts.length === 0 ? 'No prospect loaded yet.' : 'No matching results found.'}</p>
@@ -1931,6 +1946,7 @@ function renderWorkspaceTable() {
             </tr>
         `;
         lucide.createIcons();
+        lastContactsTableHtmlCache = "";
         return;
     }
     
@@ -1978,6 +1994,11 @@ function renderWorkspaceTable() {
                             <i data-lucide="phone"></i> ${c.phone || '—'}
                         </span>
                     </div>
+                </td>
+                <td>
+                    <span class="contact-dob" title="${c.dob || 'Not Shared'}">
+                        <i data-lucide="calendar"></i> ${c.dob || '—'}
+                    </span>
                 </td>
                 <td>
                     <span class="status-badge ${statusClass}" title="${c.logs || ''}">
@@ -2250,4 +2271,10 @@ async function saveAccountsOrderToServer(orderList) {
     } catch (e) {
         console.error("Failed persisting manual shuffle sequence to backend:", e);
     }
+}
+
+async function downloadContacts() {
+    if (currentAccountId === "admin") return;
+    const status = statusFilterSelect ? statusFilterSelect.value : "all";
+    window.location.href = `${API_BASE}/export?account_id=${currentAccountId}&status=${status}`;
 }

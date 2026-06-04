@@ -1,3 +1,4 @@
+
 import os
 
 # Dynamic Writable Paths Resolver
@@ -75,7 +76,14 @@ class AutomationState:
             self.logs.append(log_entry)
             if len(self.logs) > 200:
                 self.logs.pop(0)
-        print(f"[{timestamp}] [{type.upper()}] {text}")
+        try:
+            print(f"[{timestamp}] [{type.upper()}] {text}")
+        except Exception:
+            try:
+                safe_text = text.encode('ascii', errors='replace').decode('ascii')
+                print(f"[{timestamp}] [{type.upper()}] {safe_text}")
+            except Exception:
+                pass
 
     def update_status(self, action=None, progress=None):
         with self._lock:
@@ -779,8 +787,11 @@ def scrape_contact_info(page, username, account_id="default"):
     Uses JavaScript evaluation for robust extraction. LinkedIn renders the overlay as
     <dialog data-testid="dialog" open>, NOT .artdeco-modal (as of 2025+).
     """
+    HEADER_ANCHOR = "xpath=//main//*[self::section or contains(@class, 'card') or contains(@class, 'top-card')][.//h1][1]"
     email = None
     phone = None
+    connection_date = None
+    dob = None
     acc_state = get_account_state(account_id)
     try:
         # Check if we are already on this user's profile page to avoid duplicate navigation
@@ -794,18 +805,29 @@ def scrape_contact_info(page, username, account_id="default"):
         else:
             acc_state.add_log("Already on target profile page. Directly opening contact info...", "info")
             
+        # Dismiss any open dropdowns/menus that might overlap the Contact info link
+        try:
+            page.keyboard.press("Escape")
+            time.sleep(1.0)
+        except:
+            pass
+            
         # Click Contact info link to trigger the overlay/section
         clicked = False
         contact_info_selectors = [
-            "a:has-text('Contact info')",
-            "#top-card-relationship-reveal-contact-info",
-            "a[href*='contact-info']",
-            "a[href*='/overlay/contact-info/']"
+            f"{HEADER_ANCHOR}//a[contains(., 'Contact info')]",
+            f"{HEADER_ANCHOR}//a[contains(@href, 'contact-info')]",
+            "main section:first-of-type a:has-text('Contact info')",
+            "main section:first-of-type a[href*='contact-info']",
+            "main section:first-of-type a[href*='/overlay/contact-info/']",
+            "main [class*='top-card'] a:has-text('Contact info')",
+            "main [class*='top-card'] a[href*='contact-info']",
+            "#top-card-relationship-reveal-contact-info"
         ]
         
         # Wait a moment to ensure rendering is fully settled
         try:
-            page.locator("a:has-text('Contact info'), #top-card-relationship-reveal-contact-info").first.wait_for(state="visible", timeout=4000)
+            page.locator("main section:first-of-type a:has-text('Contact info'), main section:first-of-type a[href*='contact-info']").first.wait_for(state="visible", timeout=3000)
         except:
             pass
             
@@ -829,46 +851,46 @@ def scrape_contact_info(page, username, account_id="default"):
         # Smart extraction
         try:
             username_for_js = re.sub(r'[^a-z0-9]', '', username.lower())
-            email = page.evaluate("""(usernameClean) => {
+            email = page.evaluate(r"""(usernameClean) => {
                 const dialog = document.querySelector('.pv-contact-info-modal') ||
                                document.querySelector('.artdeco-modal') ||
                                document.querySelector('dialog[open]') ||
                                document.querySelector('[data-testid="dialog"]') ||
                                document.querySelector('[role="dialog"].artdeco-modal') ||
-                               document.querySelector('[role="dialog"]');
-                let links = dialog ? Array.from(dialog.querySelectorAll('a[href^="mailto:"]')) : [];
-                if (links.length === 0) {
-                    links = Array.from(document.querySelectorAll('a[href^="mailto:"]'));
+                               document.querySelector('[role="dialog"]') ||
+                               document;
+                
+                // 1. Try finding mailto link
+                let links = Array.from(dialog.querySelectorAll('a[href^="mailto:"]'));
+                if (links.length > 0) {
+                    const addr = links[0].href.replace('mailto:', '').split('?')[0].trim();
+                    if (addr) return addr;
                 }
-                if (links.length === 0) return null;
-                const byUsername = links.find(l => {
-                    const addr = l.href.replace('mailto:', '').split('?')[0].trim();
-                    const local = addr.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-                    return usernameClean && (local.includes(usernameClean) || usernameClean.includes(local));
-                });
-                if (byUsername) return byUsername.href.replace('mailto:', '').split('?')[0].trim();
-                if (dialog) {
-                    const allEls = Array.from(dialog.querySelectorAll('*'));
-                    for (const el of allEls) {
-                        const txt = (el.textContent || '').trim();
-                        if ((txt === 'Email address' || txt === 'Email') && el.children.length === 0) {
-                            let cur = el.parentElement;
-                            for (let i = 0; i < 6; i++) {
-                                if (!cur) break;
-                                const link = cur.querySelector('a[href^="mailto:"]');
-                                if (link) {
-                                    const addr = link.href.replace('mailto:', '').split('?')[0].trim();
-                                    if (addr) return addr;
-                                }
-                                cur = cur.parentElement;
-                            }
-                        }
+                
+                // 2. Regex search on full text content
+                const text = dialog.innerText || dialog.textContent || '';
+                const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+                const matches = text.match(emailRegex);
+                if (matches && matches.length > 0) {
+                    const filtered = matches.filter(m => !m.toLowerCase().includes('linkedin.com'));
+                    if (filtered.length > 0) return filtered[0].trim();
+                }
+                
+                // 3. Match any anchor link containing @
+                const allLinks = Array.from(dialog.querySelectorAll('a'));
+                for (const link of allLinks) {
+                    const href = link.getAttribute('href') || '';
+                    if (href.includes('@') || link.textContent.includes('@')) {
+                        const cleanHref = href.replace('mailto:', '').split('?')[0].trim();
+                        if (cleanHref && cleanHref.includes('@')) return cleanHref;
+                        const cleanText = link.textContent.trim();
+                        if (cleanText && cleanText.includes('@')) return cleanText;
                     }
                 }
-                return links[links.length - 1].href.replace('mailto:', '').split('?')[0].trim();
+                return null;
             }""", username_for_js)
             if email:
-                acc_state.add_log(f"Extracted email via JS: {email}", "info")
+                acc_state.add_log(f"Extracted email: {email}", "info")
         except Exception as e:
             acc_state.add_log(f"JS email extraction failed: {str(e)}", "warning")
 
@@ -880,43 +902,43 @@ def scrape_contact_info(page, username, account_id="default"):
                                document.querySelector('[data-testid="dialog"]') ||
                                document.querySelector('[role="dialog"].artdeco-modal') ||
                                document.querySelector('[role="dialog"]') ||
-                               document.body;
+                               document;
+                
+                // 1. Try tel: link
                 const telLink = dialog.querySelector('a[href^="tel:"]');
                 if (telLink) return telLink.href.replace('tel:', '').trim();
-                const allEls = Array.from(dialog.querySelectorAll('*'));
-                for (const el of allEls) {
-                    const txt = (el.textContent || '').trim();
-                    if ((txt === 'Phone' || txt === 'Phone number') && el.children.length === 0) {
-                        let cur = el.parentElement;
-                        for (let i = 0; i < 6; i++) {
-                            if (!cur) break;
-                            const children = Array.from(cur.children);
-                            for (const child of children) {
-                                if (child === el) continue;
-                                const childTxt = (child.innerText || child.textContent || '').trim();
-                                if (/[+]?[\d][\d\s\-()+]{5,}/.test(childTxt)) return childTxt;
-                            }
-                            cur = cur.parentElement;
+                
+                // 2. Line by line text analysis
+                const text = dialog.innerText || dialog.textContent || '';
+                const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    if (/phone|mobile|telephone|contact/i.test(line)) {
+                        const concatMatch = line.match(/(?:phone|mobile|telephone|contact)\s*:?\s*([+]?[\d][\d\s\-()+]{5,})/i);
+                        if (concatMatch) return concatMatch[1].trim();
+                        
+                        const numMatch = line.match(/([+]?[\d][\d\s\-()+]{5,})/);
+                        if (numMatch) return numMatch[1].trim();
+                        
+                        if (i + 1 < lines.length) {
+                            const nextLine = lines[i + 1];
+                            const nextMatch = nextLine.match(/([+]?[\d][\d\s\-()+]{5,})/);
+                            if (nextMatch) return nextMatch[1].trim();
                         }
                     }
                 }
-                const dlgText = dialog.innerText || '';
-                const lines = dlgText.split('\\n').map(l => l.trim()).filter(l => l);
-                for (let i = 0; i < lines.length; i++) {
-                    if (/^(Phone|Mobile|Telephone)$/i.test(lines[i]) && i + 1 < lines.length) {
-                        const nxt = lines[i + 1];
-                        if (/\d{5,}/.test(nxt)) return nxt;
-                    }
-                    const concatMatch = lines[i].match(/^(Phone|Mobile|Telephone)\s*([+]?[\d][\d\s\-()+]{5,})/i);
-                    if (concatMatch) return concatMatch[2].trim();
-                }
+                
+                // 3. Bounding box fallback match
+                const generalMatches = text.match(/([+]?\d[\d\s\-()+]{8,})/g);
+                if (generalMatches && generalMatches.length > 0) return generalMatches[0].trim();
+                
                 return null;
             }""")
             if phone_raw:
                 cleaned = re.sub(r'^(Phone|Mobile|Telephone|Work|Home)\s*', '', phone_raw.strip(), flags=re.IGNORECASE).strip()
                 cleaned = re.sub(r'\s*\([^)]*\)\s*$', '', cleaned).strip()
                 phone = cleaned if cleaned and any(c.isdigit() for c in cleaned) else phone_raw.strip()
-                acc_state.add_log(f"Extracted phone via JS: {phone}", "info")
+                acc_state.add_log(f"Extracted phone: {phone}", "info")
         except Exception as e:
             acc_state.add_log(f"JS phone extraction failed: {str(e)}", "warning")
 
@@ -928,45 +950,30 @@ def scrape_contact_info(page, username, account_id="default"):
                                document.querySelector('dialog[open]') ||
                                document.querySelector('[data-testid="dialog"]') ||
                                document.querySelector('[role="dialog"].artdeco-modal') ||
-                               document.querySelector('[role="dialog"]');
-                if (!dialog) return null;
-                const allEls = Array.from(dialog.querySelectorAll('*'));
-                for (const el of allEls) {
-                    const txt = (el.textContent || '').trim();
-                    if (/^Connected(\s+since)?$/i.test(txt) && el.children.length === 0) {
-                        let cur = el.parentElement;
-                        for (let i = 0; i < 4; i++) {
-                            if (!cur) break;
-                            const childTxts = Array.from(cur.childNodes)
-                                .map(node => (node.textContent || '').trim())
-                                .filter(t => t && !/^Connected(\s+since)?$/i.test(t));
-                            for (const t of childTxts) {
-                                if (/[A-Za-z]+\s+\d{1,2},\s+\d{4}/.test(t) || /[A-Za-z]+\s+\d{4}/.test(t)) {
-                                    return t;
-                                }
-                            }
-                            cur = cur.parentElement;
-                        }
-                    }
-                }
-                const dlgText = dialog.innerText || '';
-                const lines = dlgText.split('\\n').map(l => l.trim()).filter(l => l);
+                               document.querySelector('[role="dialog"]') ||
+                               document;
+                
+                const text = dialog.innerText || dialog.textContent || '';
+                const lines = text.split('\n').map(l => l.trim()).filter(l => l);
                 for (let i = 0; i < lines.length; i++) {
-                    if (/^Connected(\s+since)?$/i.test(lines[i]) && i + 1 < lines.length) {
-                        const nxt = lines[i + 1];
-                        if (/[A-Za-z]+\s+\d{1,2},\s+\d{4}/.test(nxt) || /[A-Za-z]+\s+\d{4}/.test(nxt)) {
-                            return nxt;
+                    const line = lines[i];
+                    if (/connected|since/i.test(line)) {
+                        const concatMatch = line.match(/(?:connected|since)\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})/i) || 
+                                            line.match(/(?:connected|since)\s+([A-Za-z]+\s+\d{4})/i);
+                        if (concatMatch) return concatMatch[1].trim();
+                        
+                        if (i + 1 < lines.length) {
+                            const nextLine = lines[i + 1];
+                            if (/[A-Za-z]+\s+\d{1,2},\s+\d{4}/.test(nextLine) || /[A-Za-z]+\s+\d{4}/.test(nextLine)) {
+                                return nextLine;
+                            }
                         }
                     }
-                    const concatMatch = lines[i].match(/^Connected(?:\s+since)?\s+([A-Za-z]+\s+\d{1,2},\s+\d{4})/i) || 
-                                        lines[i].match(/^Connected(?:\s+since)?\s+([A-Za-z]+\s+\d{4})/i);
-                    if (concatMatch) return concatMatch[1].trim();
                 }
                 return null;
             }""")
             if connection_date_raw:
                 acc_state.add_log(f"Extracted raw connection date: {connection_date_raw}", "info")
-                # Clean prefix "Connected " or "Connected since " if present from the scraped date text
                 ds = re.sub(r'^Connected(\s+since)?\s+', '', connection_date_raw.strip(), flags=re.IGNORECASE).strip()
                 parsed_dt = None
                 for fmt in ("%B %d, %Y", "%b %d, %Y"):
@@ -990,7 +997,36 @@ def scrape_contact_info(page, username, account_id="default"):
         except Exception as e:
             acc_state.add_log(f"JS connection date extraction failed: {str(e)}", "warning")
 
-        acc_state.add_log(f"Scrape Complete -> Email: {email or 'Not Shared'}, Phone: {phone or 'Not Shared'}, Connected: {connection_date or 'Unknown'}", "success")
+        dob = None
+        try:
+            dob_raw = page.evaluate(r"""() => {
+                const dialog = document.querySelector('.pv-contact-info-modal') ||
+                               document.querySelector('.artdeco-modal') ||
+                               document.querySelector('dialog[open]') ||
+                               document.querySelector('[data-testid="dialog"]') ||
+                               document.querySelector('[role="dialog"].artdeco-modal') ||
+                               document.querySelector('[role="dialog"]') ||
+                               document;
+                
+                const text = dialog.innerText || dialog.textContent || '';
+                const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    if (/birthday/i.test(line)) {
+                        if (i + 1 < lines.length) {
+                            return lines[i + 1];
+                        }
+                    }
+                }
+                return null;
+            }""")
+            if dob_raw:
+                dob = dob_raw.strip()
+                acc_state.add_log(f"Extracted DOB: {dob}", "info")
+        except Exception as e:
+            acc_state.add_log(f"JS DOB extraction failed: {str(e)}", "warning")
+
+        acc_state.add_log(f"Scrape Complete -> Email: {email or 'Not Shared'}, Phone: {phone or 'Not Shared'}, Connected: {connection_date or 'Unknown'}, DOB: {dob or 'Not Shared'}", "success")
         try:
             page.keyboard.press("Escape")
             time.sleep(1.0)
@@ -998,7 +1034,7 @@ def scrape_contact_info(page, username, account_id="default"):
             pass
     except Exception as ex:
         acc_state.add_log(f"Failed to scrape contact info overlay: {str(ex)}", "error")
-    return email, phone, connection_date
+    return email, phone, connection_date, dob
 
 def verify_profile_status(page, username, acc_state):
     """
@@ -1035,9 +1071,10 @@ def verify_profile_status(page, username, acc_state):
         
         # Wait for page layout to settle
         try:
-            page.locator("main section h1, main section h2").first.wait_for(state="visible", timeout=8000)
-        except:
-            pass
+            page.locator("main section h1, main section h2").first.wait_for(state="visible", timeout=12000)
+        except Exception as wait_err:
+            acc_state.add_log(f"Profile heading not visible for {username}: {str(wait_err)}. Returning Error to protect database.", "warning")
+            return "Error"
             
         # Robust JS-based connection status checker (scoped to profile top card & degree-aware)
         status_result = page.evaluate(r"""
@@ -1045,29 +1082,81 @@ def verify_profile_status(page, username, acc_state):
                 const nameHeader = document.querySelector('main h1');
                 const topCard = nameHeader ? (nameHeader.closest('.artdeco-card') || nameHeader.closest('section') || nameHeader.parentElement?.parentElement?.parentElement || document) : (document.querySelector('main section') || document);
                 
+                if (!topCard) return { status: "Not Started" };
+                
                 const actions = Array.from(topCard.querySelectorAll('button, a'));
                 
-                // 1. First check: Is there a visible "Connect" button in the top card?
-                // If yes, the profile is 100% Not Started (Not Connected).
-                const hasConnect = actions.some(el => {
-                    if (!el.offsetHeight && !el.offsetWidth) return false;
+                // 1. Check for explicit "Remove Connection" anywhere in topCard (including hidden dropdown items)
+                const hasRemoveConnection = actions.some(el => {
                     const text = el.textContent.trim().toLowerCase();
                     const label = (el.getAttribute('aria-label') || '').toLowerCase();
-                    return (text === 'connect' || (label.includes('invite') && label.includes('connect'))) && !text.includes('remove') && !label.includes('remove');
+                    return text.includes('remove connection') || text.includes('remove first-degree') || label.includes('remove connection') || label.includes('remove first-degree');
                 });
-                
-                if (hasConnect) {
-                    return { status: "Not Started" };
+                if (hasRemoveConnection) {
+                    return { status: "Connected" };
                 }
                 
-                // 2. Second check: Is there a visible "Pending" / "Sent" / "Request sent" button in the top card?
-                // If yes, the profile connection is Pending.
+                // 2. Check for Message button that is not InMail/locked (tells us they are a 1st degree connection)
+                const hasMessageBtn = actions.some(el => {
+                    const text = el.textContent.trim().toLowerCase();
+                    const label = (el.getAttribute('aria-label') || '').toLowerCase();
+                    const hasMessageText = (text === 'message' || label.includes('message'));
+                    if (hasMessageText) {
+                        const html = el.innerHTML.toLowerCase();
+                        const isLocked = html.includes('lock') || text.includes('inmail') || label.includes('inmail') || label.includes('locked');
+                        return !isLocked;
+                    }
+                    return false;
+                });
+                if (hasMessageBtn) {
+                    return { status: "Connected" };
+                }
+                
+                // 3. Check for messaging thread link
+                const hasMessageThread = actions.some(el => {
+                    const href = el.getAttribute('href') || '';
+                    return href.includes('/messaging/thread/');
+                });
+                if (hasMessageThread) {
+                    return { status: "Connected" };
+                }
+                
+                // 4. Scan for explicit connection degree badges (NO visibility check!)
+                const allElements = Array.from(topCard.querySelectorAll('span, div, button, a, em, strong'));
+                let degree = null;
+                for (const el of allElements) {
+                    const text = el.textContent.trim().toLowerCase();
+                    const classes = Array.from(el.classList || []);
+                    const isDistClass = classes.some(cls => cls.includes('dist') || cls.includes('degree') || cls.includes('badge'));
+                    
+                    const cleanText = text.replace(/[\s•·\.\,ºª]/g, '').toLowerCase();
+                    if (cleanText === '1st' || cleanText.includes('1stdegree') || cleanText === '1er') {
+                        degree = "1st";
+                        break;
+                    }
+                    if (cleanText === '2nd' || cleanText.includes('2nddegree') || cleanText === '2nd' ||
+                        cleanText === '3rd' || cleanText.includes('3rddegree') || cleanText === '3rd') {
+                        degree = "other";
+                    }
+                    if (isDistClass && (text.includes('1st') || text.includes('1er') || text.includes('1.'))) {
+                        degree = "1st";
+                        break;
+                    }
+                    if (isDistClass && (text.includes('2nd') || text.includes('3rd') || text.includes('2.') || text.includes('3.'))) {
+                        degree = "other";
+                    }
+                }
+                
+                if (degree === "1st") {
+                    return { status: "Connected" };
+                }
+                
+                // 5. Check for "Pending" / "Sent" / "Request sent" / "Withdraw" (NO visibility check!)
                 const hasPending = actions.some(el => {
-                    if (!el.offsetHeight && !el.offsetWidth) return false;
                     const text = el.textContent.trim().toLowerCase();
                     const label = (el.getAttribute('aria-label') || '').toLowerCase();
                     
-                    if (text === 'pending' || text === 'sent' || label.includes('pending') || label.includes('sent connection')) {
+                    if (text === 'pending' || text === 'sent' || text.includes('withdraw') || label.includes('pending') || label.includes('sent connection') || label.includes('withdraw')) {
                         return true;
                     }
                     if (text.includes('pending') || text.includes('invitation sent') || text.includes('request sent')) {
@@ -1080,55 +1169,72 @@ def verify_profile_status(page, username, acc_state):
                     return { status: "Pending" };
                 }
                 
-                // 3. Third check: Scan for explicit connection degree badges in the top card
-                const allSpans = Array.from(topCard.querySelectorAll('span, div, button, a'));
-                let degree = null;
-                for (const el of allSpans) {
-                    if (!el.offsetHeight && !el.offsetWidth) continue;
-                    const text = el.textContent.trim();
-                    if (/\b1st\b/i.test(text)) {
-                        if (text.length < 30 && !text.toLowerCase().includes("class") && !text.toLowerCase().includes("year") && !text.toLowerCase().includes("anniversary")) {
-                            degree = "1st";
-                            break;
-                        }
-                    }
-                    if (/\b(2nd|3rd)\b/i.test(text)) {
-                        if (text.length < 30 && !text.toLowerCase().includes("class") && !text.toLowerCase().includes("year") && !text.toLowerCase().includes("anniversary")) {
-                            degree = "other";
-                            break;
-                        }
-                    }
+                // 6. Check for "Connect" button in the top card
+                const hasDirectConnect = actions.some(el => {
+                    const text = el.textContent.trim().toLowerCase();
+                    const label = (el.getAttribute('aria-label') || '').toLowerCase();
+                    return (text === 'connect' || (label.includes('invite') && label.includes('connect'))) && !text.includes('remove') && !label.includes('remove');
+                });
+                
+                if (hasDirectConnect) {
+                    return { status: "Not Started" };
                 }
                 
-                if (degree === "1st") {
-                    return { status: "Connected" };
+                // 7. If degree is other (2nd/3rd degree), and not pending, it's Not Started
+                if (degree === "other") {
+                    return { status: "Not Started" };
                 }
                 
-                // 4. Fourth check: If degree is not other, verify if there's a Messaging thread link or valid Message button
-                if (degree !== "other") {
-                    for (const el of actions) {
-                        if (!el.offsetHeight && !el.offsetWidth) continue;
-                        const text = el.textContent.trim().toLowerCase();
-                        const label = (el.getAttribute('aria-label') || '').toLowerCase();
-                        const href = el.getAttribute('href') || '';
-                        
-                        if (href.includes('/messaging/thread/')) {
-                            return { status: "Connected" };
-                        }
-                        
-                        if (text === 'message' || label === 'message' || label.startsWith('message ') || text.startsWith('message ')) {
-                            if (!text.includes('inmail') && !label.includes('inmail') && !label.includes('premium')) {
-                                return { status: "Connected" };
-                            }
-                        }
-                    }
-                }
-                
+                // Default fallback
                 return { status: "Not Started" };
             }
         """)
         
         detected_status = status_result.get("status", "Not Started")
+        
+        # Self-healing fallback: If status is detected as "Not Started", click the "More" actions menu to check for connection removal option
+        if detected_status == "Not Started":
+            acc_state.add_log("Static connection badge not detected. Attempting self-healing check via 'More' actions menu...", "info")
+            more_btn = None
+            more_selectors = [
+                "button:has-text('More')",
+                "button[aria-label*='More actions']",
+                "main section button:has-text('More')",
+                "main section button[aria-label*='More actions']"
+            ]
+            for sel in more_selectors:
+                try:
+                    el = page.locator(sel).first
+                    if el.is_visible() and el.is_enabled():
+                        more_btn = el
+                        break
+                except: pass
+                
+            if more_btn:
+                try:
+                    more_btn.click(timeout=4000)
+                    time.sleep(1.5)
+                    is_remove_visible = page.evaluate("""
+                        () => {
+                            const items = document.querySelectorAll('[role="menuitem"], .artdeco-dropdown__item, .artdeco-dropdown button, [role="button"]');
+                            for (const item of items) {
+                                const text = (item.innerText || item.textContent || '').trim().toLowerCase();
+                                if (text.includes('remove connection') || text.includes('remove first-degree')) {
+                                    return true;
+                                }
+                            }
+                            return false;
+                        }
+                    """)
+                    if is_remove_visible:
+                        acc_state.add_log("Self-healing check passed: 'Remove connection' detected in dropdown menu! User is Connected.", "success")
+                        detected_status = "Connected"
+                    else:
+                        # Close the dropdown to leave page clean
+                        more_btn.click(timeout=2000)
+                except Exception as more_err:
+                    acc_state.add_log(f"Self-healing 'More' check encountered an error: {str(more_err)}", "warning")
+                    
         acc_state.add_log(f"Profile connection status detected: '{detected_status}'", "info")
         return detected_status
         
@@ -1253,6 +1359,34 @@ def sync_acceptance_task_sync(account_id="default"):
         if len(pending_usernames) == 0 and not empty_state_visible:
             raise Exception("Page failed to load the invitation manager list (0 pending requests found, but no empty-state message detected). Sync aborted for safety to prevent status corruption.")
             
+        # Let's also navigate to the Connections page to get all active connection usernames
+        connected_usernames = set()
+        try:
+            acc_state.add_log("Navigating to Connections list to sync recent acceptances...", "info")
+            page.goto("https://www.linkedin.com/mynetwork/invite-connect/connections/", wait_until="domcontentloaded", timeout=30000)
+            time.sleep(5)
+            
+            # Scroll connections list dynamically to load recent connections
+            acc_state.add_log("Scrolling through Connections list to load recent connections...", "info")
+            for scroll_step in range(1, 9): # Scroll 8 times to load around 60 connections
+                if acc_state.stop_requested:
+                    break
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                time.sleep(2.0)
+                
+            conn_hrefs = page.evaluate("Array.from(document.querySelectorAll('a')).map(a => a.href).filter(h => h && h.includes('/in/'))")
+            for href in conn_hrefs:
+                try:
+                    url_clean = href.split("?")[0].rstrip("/")
+                    username = url_clean.split("/in/")[-1].strip()
+                    if username:
+                        connected_usernames.add(username)
+                except Exception:
+                    continue
+            acc_state.add_log(f"Gathered {len(connected_usernames)} unique connection usernames.", "info")
+        except Exception as conn_err:
+            acc_state.add_log(f"Failed to load/parse Connections list page: {str(conn_err)}. Skipping connections pre-scan.", "warning")
+            
         db_data = load_db(account_id)
         updated_count = 0
         
@@ -1264,6 +1398,7 @@ def sync_acceptance_task_sync(account_id="default"):
             url_clean = url.split("?")[0].rstrip("/")
             contact_username = url_clean.split("/in/")[-1].strip() if "/in/" in url_clean else ""
             contact_name = contact.get("name", "")
+            should_enrich = False
             
             # Strict skip rule for Harshit Saxena (Never touch under any sync context)
             if "harshit" in contact_name.lower() or "saxena" in contact_name.lower() or (contact_username and "harshit-saxena" in contact_username.lower()):
@@ -1272,9 +1407,17 @@ def sync_acceptance_task_sync(account_id="default"):
             if contact_username and contact_username in pending_usernames:
                 if status != "Pending":
                     contact["status"] = "Pending"
-                    contact["date_sent"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     acc_state.add_log(f"Status Updated: {contact.get('name', 'Unknown')} is Pending on LinkedIn (Auto-discovered).", "info")
                     updated_count += 1
+            elif contact_username and contact_username in connected_usernames:
+                if status != "Connected":
+                    contact["status"] = "Connected"
+                    contact["date_accepted"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    acc_state.add_log(f"Status Updated: {contact_name} is Connected on LinkedIn (Auto-discovered via Connections list).", "success")
+                    should_enrich = True
+                    updated_count += 1
+                else:
+                    should_enrich = (contact.get("email") is None or contact.get("phone") is None or contact.get("dob") is None or contact.get("date_accepted") is None or contact.get("date_accepted") == "")
             else:
                 should_enrich = False
                 if status in ["Sent", "Pending"]:
@@ -1296,36 +1439,37 @@ def sync_acceptance_task_sync(account_id="default"):
                             updated_count += 1
                         else:
                             acc_state.add_log(f"Verification failed or inconclusive for {contact_name}. Leaving status as Pending for safety.", "warning")
-                elif status == "Connected" and (contact.get("email") is None or contact.get("phone") is None or contact.get("date_accepted") is None or contact.get("date_accepted") == ""):
+                elif status == "Connected" and (contact.get("email") is None or contact.get("phone") is None or contact.get("dob") is None or contact.get("date_accepted") is None or contact.get("date_accepted") == ""):
                     acc_state.add_log(f"Profile {contact.get('name', 'Unknown')} is already Connected but lacks complete contact info or genuine connection date. Attempting enrichment...", "info")
                     should_enrich = True
                     
-                if should_enrich:
-                    if contact_username:
+            if should_enrich:
+                if contact_username:
+                    try:
+                        email, phone, connection_date, dob = scrape_contact_info(page, contact_username, account_id)
+                        contact["email"] = email if email else "Not Shared"
+                        contact["phone"] = phone if phone else "Not Shared"
+                        contact["dob"] = dob if dob else "Not Shared"
+                        if connection_date:
+                            # If the scraped connection date is today's date, preserve today's precise acceptance time!
+                            scraped_date = connection_date.split(" ")[0]
+                            today_date = datetime.now().strftime("%Y-%m-%d")
+                            if scraped_date == today_date and contact.get("date_accepted") and contact["date_accepted"].startswith(today_date):
+                                # Already has a precise today's timestamp, keep it!
+                                pass
+                            else:
+                                contact["date_accepted"] = connection_date
+                    except Exception as enrichment_err:
+                        acc_state.add_log(f"Enrichment error for {contact.get('name', 'Unknown')}: {str(enrichment_err)}", "warning")
+                    finally:
                         try:
-                            email, phone, connection_date = scrape_contact_info(page, contact_username, account_id)
-                            contact["email"] = email if email else "Not Shared"
-                            contact["phone"] = phone if phone else "Not Shared"
-                            if connection_date:
-                                # If the scraped connection date is today's date, preserve today's precise acceptance time!
-                                scraped_date = connection_date.split(" ")[0]
-                                today_date = datetime.now().strftime("%Y-%m-%d")
-                                if scraped_date == today_date and contact.get("date_accepted") and contact["date_accepted"].startswith(today_date):
-                                    # Already has a precise today's timestamp, keep it!
-                                    pass
-                                else:
-                                    contact["date_accepted"] = connection_date
-                        except Exception as enrichment_err:
-                            acc_state.add_log(f"Enrichment error for {contact.get('name', 'Unknown')}: {str(enrichment_err)}", "warning")
-                        finally:
-                            try:
-                                acc_state.add_log("Returning to Sent Invitations page...", "info")
-                                page.goto("https://www.linkedin.com/mynetwork/invitation-manager/sent/", wait_until="domcontentloaded", timeout=30000)
-                                time.sleep(3)
-                            except Exception as return_err:
-                                acc_state.add_log(f"Failed to navigate back to Sent Invitations: {str(return_err)}", "warning")
-                    if status == "Connected":
-                        updated_count += 1
+                            acc_state.add_log("Returning to Sent Invitations page...", "info")
+                            page.goto("https://www.linkedin.com/mynetwork/invitation-manager/sent/", wait_until="domcontentloaded", timeout=30000)
+                            time.sleep(3)
+                        except Exception as return_err:
+                            acc_state.add_log(f"Failed to navigate back to Sent Invitations: {str(return_err)}", "warning")
+                if status == "Connected":
+                    updated_count += 1
         
         if updated_count > 0:
             save_db(db_data, account_id)
@@ -1569,31 +1713,84 @@ def run_automation_worker_sync(account_id="default", config=None):
                 status_result = page.evaluate("""
                     () => {
                         // Scope STRICTLY to the first section of main to completely exclude sidebar elements (recommending other profiles)
-                        const topCard = document.querySelector('main section') || document.querySelector('main [class*="top-card"]') || document;
+                        const nameHeader = document.querySelector('main h1');
+                        const topCard = nameHeader ? (nameHeader.closest('.artdeco-card') || nameHeader.closest('section') || nameHeader.parentElement?.parentElement?.parentElement || document) : (document.querySelector('main section') || document);
+                        
+                        if (!topCard) return { status: "Not Started" };
                         
                         const actions = Array.from(topCard.querySelectorAll('button, a'));
                         
-                        // 1. First check: Is there a visible "Connect" button in the top card?
-                        // If yes, the profile is 100% Not Started (Not Connected).
-                        const hasConnect = actions.some(el => {
-                            if (!el.offsetHeight && !el.offsetWidth) return false;
+                        // 1. Check for explicit "Remove Connection" anywhere in topCard (including hidden dropdown items)
+                        const hasRemoveConnection = actions.some(el => {
                             const text = el.textContent.trim().toLowerCase();
                             const label = (el.getAttribute('aria-label') || '').toLowerCase();
-                            return (text === 'connect' || (label.includes('invite') && label.includes('connect'))) && !text.includes('remove') && !label.includes('remove');
+                            return text.includes('remove connection') || text.includes('remove first-degree') || label.includes('remove connection') || label.includes('remove first-degree');
                         });
-                        
-                        if (hasConnect) {
-                            return { status: "Not Started" };
+                        if (hasRemoveConnection) {
+                            return { status: "Connected" };
                         }
                         
-                        // 2. Second check: Is there a visible "Pending" / "Sent" / "Request sent" button in the top card?
-                        // If yes, the profile connection is Pending.
+                        // 2. Check for Message button that is not InMail/locked (tells us they are a 1st degree connection)
+                        const hasMessageBtn = actions.some(el => {
+                            const text = el.textContent.trim().toLowerCase();
+                            const label = (el.getAttribute('aria-label') || '').toLowerCase();
+                            const hasMessageText = (text === 'message' || label.includes('message'));
+                            if (hasMessageText) {
+                                const html = el.innerHTML.toLowerCase();
+                                const isLocked = html.includes('lock') || text.includes('inmail') || label.includes('inmail') || label.includes('locked');
+                                return !isLocked;
+                            }
+                            return false;
+                        });
+                        if (hasMessageBtn) {
+                            return { status: "Connected" };
+                        }
+                        
+                        // 3. Check for messaging thread link
+                        const hasMessageThread = actions.some(el => {
+                            const href = el.getAttribute('href') || '';
+                            return href.includes('/messaging/thread/');
+                        });
+                        if (hasMessageThread) {
+                            return { status: "Connected" };
+                        }
+                        
+                        // 4. Scan for explicit connection degree badges (NO visibility check!)
+                        const allElements = Array.from(topCard.querySelectorAll('span, div, button, a, em, strong'));
+                        let degree = null;
+                        for (const el of allElements) {
+                            const text = el.textContent.trim().toLowerCase();
+                            const classes = Array.from(el.classList || []);
+                            const isDistClass = classes.some(cls => cls.includes('dist') || cls.includes('degree') || cls.includes('badge'));
+                            
+                            const cleanText = text.replace(/[\s•·\.\,ºª]/g, '').toLowerCase();
+                            if (cleanText === '1st' || cleanText.includes('1stdegree') || cleanText === '1er') {
+                                degree = "1st";
+                                break;
+                            }
+                            if (cleanText === '2nd' || cleanText.includes('2nddegree') || cleanText === '2nd' ||
+                                cleanText === '3rd' || cleanText.includes('3rddegree') || cleanText === '3rd') {
+                                degree = "other";
+                            }
+                            if (isDistClass && (text.includes('1st') || text.includes('1er') || text.includes('1.'))) {
+                                degree = "1st";
+                                break;
+                            }
+                            if (isDistClass && (text.includes('2nd') || text.includes('3rd') || text.includes('2.') || text.includes('3.'))) {
+                                degree = "other";
+                            }
+                        }
+                        
+                        if (degree === "1st") {
+                            return { status: "Connected" };
+                        }
+                        
+                        // 5. Check for "Pending" / "Sent" / "Request sent" / "Withdraw" (NO visibility check!)
                         const hasPending = actions.some(el => {
-                            if (!el.offsetHeight && !el.offsetWidth) return false;
                             const text = el.textContent.trim().toLowerCase();
                             const label = (el.getAttribute('aria-label') || '').toLowerCase();
                             
-                            if (text === 'pending' || text === 'sent' || label.includes('pending') || label.includes('sent connection')) {
+                            if (text === 'pending' || text === 'sent' || text.includes('withdraw') || label.includes('pending') || label.includes('sent connection') || label.includes('withdraw')) {
                                 return true;
                             }
                             if (text.includes('pending') || text.includes('invitation sent') || text.includes('request sent')) {
@@ -1606,32 +1803,23 @@ def run_automation_worker_sync(account_id="default", config=None):
                             return { status: "Pending" };
                         }
                         
-                        // 3. Third check: Scan for explicit connection degree badges in the top card
-                        const allSpans = Array.from(topCard.querySelectorAll('span, div, button, a'));
-                        let degree = null;
-                        for (const el of allSpans) {
-                            if (!el.offsetHeight && !el.offsetWidth) continue;
-                            const text = el.textContent.trim();
-                            // Exact distance badge check (e.g. "1st", "2nd", "3rd", "· 1st", "• 2nd")
-                            if (/^[·•\\s]*(1st|2nd|3rd|4th\\+)[·•\\s]*$/i.test(text)) {
-                                degree = text.includes('1st') ? "1st" : "other";
-                                break;
-                            }
+                        // 6. Check for "Connect" button in the top card
+                        const hasDirectConnect = actions.some(el => {
+                            const text = el.textContent.trim().toLowerCase();
+                            const label = (el.getAttribute('aria-label') || '').toLowerCase();
+                            return (text === 'connect' || (label.includes('invite') && label.includes('connect'))) && !text.includes('remove') && !label.includes('remove');
+                        });
+                        
+                        if (hasDirectConnect) {
+                            return { status: "Not Started" };
                         }
                         
-                        if (degree === "1st") {
-                            return { status: "Connected" };
+                        // 7. If degree is other (2nd/3rd degree), and not pending, it's Not Started
+                        if (degree === "other") {
+                            return { status: "Not Started" };
                         }
                         
-                        // 4. Fourth check: Verify if there's a Messaging thread link
-                        for (const el of actions) {
-                            if (!el.offsetHeight && !el.offsetWidth) continue;
-                            const href = el.getAttribute('href') || '';
-                            if (href.includes('/messaging/thread/')) {
-                                return { status: "Connected" };
-                            }
-                        }
-                        
+                        // Default fallback
                         return { status: "Not Started" };
                     }
                 """)
@@ -1649,9 +1837,10 @@ def run_automation_worker_sync(account_id="default", config=None):
                     connection_date = None
                     if target_username:
                         try:
-                            email, phone, connection_date = scrape_contact_info(page, target_username, account_id)
+                            email, phone, connection_date, dob = scrape_contact_info(page, target_username, account_id)
                             contact["email"] = email if email else "Not Shared"
                             contact["phone"] = phone if phone else "Not Shared"
+                            contact["dob"] = dob if dob else "Not Shared"
                         except Exception as enrichment_err:
                             acc_state.add_log(f"Enrichment error for already connected user: {str(enrichment_err)}", "warning")
                     
@@ -1677,35 +1866,44 @@ def run_automation_worker_sync(account_id="default", config=None):
                     continue
                 
                 if detected_status == "Pending":
-                    contact["status"] = "Pending"
-                    acc_state.add_log(f"Request is already pending for {contact.get('name', 'this user')}.", "info")
+                    acc_state.add_log(f"Request is already pending for {contact.get('name', 'this user')}. Removing from database.", "info")
                     db_data_fresh = load_db(account_id)
-                    for d in db_data_fresh:
-                        if d["profile_url"] == profile_url:
-                            d["status"] = "Pending"
-                            if not d.get("date_sent"):
-                                d["date_sent"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                contact["date_sent"] = d["date_sent"]
+                    db_data_fresh = [d for d in db_data_fresh if d.get("profile_url") != profile_url]
                     save_db(db_data_fresh, account_id)
                     continue
 
                 clicked_connect = False
-                acc_state.add_log("Primary strategy: Searching for direct 'Connect' button on the profile header...", "info")
+                
+                # Determine the unique main profile header card scope to completely avoid recommended sidebar buttons
+                top_card_scope = None
+                try:
+                    h1_loc = page.locator("main h1").first
+                    if h1_loc.is_visible(timeout=3000):
+                        top_card_scope = h1_loc.locator("xpath=ancestor::*[self::section or contains(@class, 'card') or contains(@class, 'top-card') or contains(@class, 'pv-top-card')][1]")
+                        acc_state.add_log("Successfully scoped search to unique main profile header card.", "info")
+                except:
+                    pass
+                
+                if not top_card_scope:
+                    top_card_scope = page.locator("main section:first-of-type, main [class*='top-card']").first
+                    
+                acc_state.add_log("Primary strategy: Searching for direct 'Connect' button inside profile card scope...", "info")
                 connect_button = None
                 direct_connect_selectors = [
-                    f"{HEADER_ANCHOR}//button[contains(., 'Connect')]",
-                    f"{HEADER_ANCHOR}//*[text()='Connect']",
-                    "main [class*='top-card'] button:has-text('Connect')",
-                    "xpath=//main//button[contains(., 'Connect') and not(contains(@aria-label, 'Remove'))]"
+                    "button:has-text('Connect'):not(.artdeco-dropdown__item):not([role='menuitem'])",
+                    "*[text()='Connect']:not(.artdeco-dropdown__item):not([role='menuitem'])",
+                    "xpath=.//button[contains(., 'Connect') and not(ancestor::*[contains(@class, 'dropdown') or contains(@role, 'menu')])]",
+                    "xpath=.//*[text()='Connect' and not(ancestor::*[contains(@class, 'dropdown') or contains(@role, 'menu')])]"
                 ]
+                
                 try:
-                    page.locator(", ".join([s for s in direct_connect_selectors if not s.startswith("xpath=")])).first.wait_for(state="visible", timeout=2000)
+                    top_card_scope.locator("button:has-text('Connect'):not(.artdeco-dropdown__item):not([role='menuitem'])").first.wait_for(state="visible", timeout=2000)
                 except:
                     pass
 
                 for selector in direct_connect_selectors:
                     try:
-                        btn = page.locator(selector).first
+                        btn = top_card_scope.locator(selector).first
                         if btn.is_visible() and btn.is_enabled():
                             connect_button = btn
                             break
@@ -1715,17 +1913,18 @@ def run_automation_worker_sync(account_id="default", config=None):
                 if connect_button:
                     acc_state.add_log("Found direct 'Connect' button on header. Clicking...", "info")
                     try:
-                        connect_button.evaluate("el => el.click()")
-                    except Exception as js_err:
-                        acc_state.add_log(f"Playwright locator.evaluate direct click failed: {js_err}. Trying fallback locator click...", "warning")
                         connect_button.click(force=True)
+                    except Exception as err:
+                        acc_state.add_log(f"Playwright click failed: {err}. Trying fallback JS evaluate...", "warning")
+                        connect_button.evaluate("el => el.click()")
                     clicked_connect = True
                 else:
-                    acc_state.add_log("Direct 'Connect' button not found via standard selectors. Trying JS-based deep search...", "info")
+                    acc_state.add_log("Direct 'Connect' button not found inside profile header. Trying JS-based deep search...", "info")
                     try:
                         js_clicked = page.evaluate("""
                             () => {
-                                const topCard = document.querySelector('main section') || document.querySelector('main [class*="top-card"]') || document.querySelector('main');
+                                const h1 = document.querySelector('main h1');
+                                const topCard = h1 ? (h1.closest('section') || h1.closest('[class*="card"]') || h1.closest('div.ph5') || h1.parentElement.parentElement) : (document.querySelector('main section') || document.querySelector('main [class*="top-card"]'));
                                 if (!topCard) return false;
                                 
                                 const btns = Array.from(topCard.querySelectorAll('button, a'));
@@ -1752,61 +1951,52 @@ def run_automation_worker_sync(account_id="default", config=None):
                         acc_state.add_log("Direct 'Connect' button not visible or disabled on header.", "info")
                     
                 if not clicked_connect:
-                    acc_state.add_log("Fallback: Looking for 'More' or '...' dropdown button...", "info")
+                    acc_state.add_log("Fallback: Looking for 'More' or '...' dropdown button inside profile header scope...", "info")
                     more_button = None
+                    more_clicked = False
 
-                    # --- STRATEGY 1: Try standard CSS/aria-label selectors (strictly scoped to top card section) ---
+                    # Scoped More/Actions selectors inside top_card_scope to prevent matching suggested sidebar profiles
                     more_selectors = [
-                        # Strict XPath selectors inside the profile's top card
-                        f"{HEADER_ANCHOR}//button[@aria-label='More actions']",
-                        f"{HEADER_ANCHOR}//button[@aria-label='See more actions']",
-                        f"{HEADER_ANCHOR}//button[contains(@aria-label, 'More')]",
-                        f"{HEADER_ANCHOR}//button[contains(@aria-label, 'more')]",
-                        f"{HEADER_ANCHOR}//button[contains(., 'More')]",
-                        f"{HEADER_ANCHOR}//button[contains(., 'more')]",
-                        
-                        # Strict CSS selectors inside the profile top card
-                        "main section:first-of-type button[aria-label='More actions']",
-                        "main section:first-of-type button[aria-label='See more actions']",
-                        "main section:first-of-type button[aria-label*='More']",
-                        "main section:first-of-type button[aria-label*='more']",
-                        "main section:first-of-type button:has-text('More')",
-                        "main section:first-of-type button[aria-expanded]",
-                        "main [class*='top-card'] button[aria-label='More actions']",
-                        "main [class*='top-card'] button[aria-label='See more actions']",
-                        "main [class*='top-card'] button[aria-label*='More']",
-                        "main [class*='top-card'] button[aria-label*='more']",
-                        ".pvs-profile-actions button:has-text('More')",
-                        "main [class*='top-card'] button:has-text('More')",
-                        "main [class*='top-card'] .artdeco-button--muted.artdeco-button--icon",
-                        "xpath=//main//section[1]//button[normalize-space(.)='More']",
-                        "xpath=//main//section[1]//button[contains(., 'More')]",
-                        "xpath=//main//section[1]//button[contains(@aria-label, 'More actions')]"
+                        "button[aria-label='More actions']",
+                        "button[aria-label='See more actions']",
+                        "button[aria-label*='More']",
+                        "button[aria-label*='more']",
+                        "button:has-text('More')",
+                        "button[aria-expanded]",
+                        ".artdeco-button--muted.artdeco-button--icon",
+                        "xpath=.//button[normalize-space(.)='More']",
+                        "xpath=.//button[contains(., 'More')]",
+                        "xpath=.//button[contains(@aria-label, 'More actions')]"
                     ]
-                    css_more = [s for s in more_selectors if not s.startswith("xpath=")]
+                    
                     try:
-                        page.locator(", ".join(css_more)).first.wait_for(state="visible", timeout=3000)
+                        top_card_scope.locator("button[aria-label*='More'], button[aria-label*='more'], button:has-text('More')").first.wait_for(state="visible", timeout=2000)
                     except:
                         pass
+                        
                     for selector in more_selectors:
                         try:
-                            btn = page.locator(selector).first
+                            btn = top_card_scope.locator(selector).first
                             if btn.is_visible() and btn.is_enabled():
-                                more_button = btn
-                                acc_state.add_log(f"Found More/... button via: {selector}", "info")
+                                acc_state.add_log(f"Found 'More' button via selector: {selector}. Clicking...", "info")
+                                btn.click(timeout=5000)
+                                more_clicked = True
                                 break
-                        except:
+                        except Exception as e:
                             pass
 
                     # --- STRATEGY 2: JS smart scan — finds overflow button regardless of text/icon ---
-                    if not more_button:
+                    if not more_clicked:
                         try:
-                            acc_state.add_log("CSS selectors missed — using JS smart scan for More/... button...", "info")
-                            js_clicked = page.evaluate("""
+                            acc_state.add_log("CSS selectors missed or failed — attempting JS smart scan to click 'More' button...", "info")
+                            js_clicked_label = page.evaluate("""
                                 () => {
                                     // Get buttons strictly inside the profile's first top card section to prevent collisions
-                                    const topCard = document.querySelector('main section') || document.querySelector('main [class*="top-card"]') || document.querySelector('main');
-                                    const allBtns = topCard ? Array.from(topCard.querySelectorAll('button')) : [];
+                                    const h1 = document.querySelector('main h1');
+                                    const topCard = h1 ? (h1.closest('section') || h1.closest('[class*="card"]') || h1.closest('div.ph5') || h1.parentElement.parentElement) : (document.querySelector('main section') || document.querySelector('main [class*="top-card"]'));
+                                    if (!topCard) return null;
+                                    
+                                    const allBtns = Array.from(topCard.querySelectorAll('button'));
                                     
                                     // Known action button labels to EXCLUDE
                                     const excludeWords = ['message', 'follow', 'connect', 'endorse', 'hire', 'save'];
@@ -1835,27 +2025,80 @@ def run_automation_worker_sync(account_id="default", config=None):
                                     return null;
                                 }
                             """)
-                            if js_clicked:
-                                acc_state.add_log(f"JS found and clicked More/... button (label: '{js_clicked}')", "info")
+                            if js_clicked_label:
+                                acc_state.add_log(f"JS smart scan successfully clicked 'More' button (label: '{js_clicked_label}').", "info")
+                                more_clicked = True
                                 time.sleep(random.uniform(2.0, 3.0))
-                                more_button = True  # Signal: dropdown should now be open
                             else:
-                                acc_state.add_log("JS scan found no More/... button on this profile.", "warning")
+                                acc_state.add_log("JS smart scan found no 'More' button on this profile.", "warning")
                         except Exception as e:
-                            acc_state.add_log(f"JS More button scan error: {e}", "warning")
+                            acc_state.add_log(f"JS More button scan error: {str(e)}", "warning")
 
                     # Tracking failure reasons for detailed database and dashboard logs
                     detailed_fail_reason = "Connect option not visible or disabled on header."
                     
-                    if more_button:
-                        if more_button is not True:
+                    if more_clicked:
+                        # 1. Self-healing check: Is this profile actually already a 1st-degree connection?
+                        # If "Remove connection" is in the dropdown, mark them as Connected, scrape contact info, and skip connecting!
+                        is_already_connected = False
+                        try:
+                            is_already_connected = page.evaluate("""
+                                () => {
+                                    const items = document.querySelectorAll('[role="menuitem"], .artdeco-dropdown__item, .artdeco-dropdown button, [role="button"]');
+                                    for (const item of items) {
+                                        const text = (item.innerText || item.textContent || '').trim().toLowerCase();
+                                        if (text.includes('remove connection') || text.includes('remove first-degree')) {
+                                            return true;
+                                        }
+                                    }
+                                    return false;
+                                }
+                            """)
+                        except Exception as e:
+                            acc_state.add_log(f"Error checking 'Remove connection' in dropdown: {str(e)}", "warning")
+                            
+                        if is_already_connected:
+                            acc_state.add_log(f"[SELF-HEALING] 'Remove connection' detected in dropdown! '{contact_name}' is already connected (1st degree). Marking as Connected...", "success")
+                            
+                            contact["status"] = "Connected"
+                            target_username = profile_url.split("/in/")[-1].split("/")[0].split('?')[0].rstrip('/')
+                            email, phone = None, None
+                            connection_date = None
+                            
+                            if target_username:
+                                try:
+                                    email, phone, connection_date, dob = scrape_contact_info(page, target_username, account_id)
+                                    contact["email"] = email if email else "Not Shared"
+                                    contact["phone"] = phone if phone else "Not Shared"
+                                    contact["dob"] = dob if dob else "Not Shared"
+                                except Exception as enrichment_err:
+                                    acc_state.add_log(f"Enrichment error for already connected user: {str(enrichment_err)}", "warning")
+                            
+                            if connection_date:
+                                scraped_date = connection_date.split(" ")[0]
+                                today_date = datetime.now().strftime("%Y-%m-%d")
+                                if scraped_date == today_date:
+                                    contact["date_accepted"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                else:
+                                    contact["date_accepted"] = connection_date
+                            else:
+                                contact["date_accepted"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                    
+                            db_data_fresh = load_db(account_id)
+                            for d in db_data_fresh:
+                                if d["profile_url"] == profile_url:
+                                    d["status"] = "Connected"
+                                    d["date_accepted"] = contact["date_accepted"]
+                                    d["email"] = contact["email"]
+                                    d["phone"] = contact["phone"]
+                            save_db(db_data_fresh, account_id)
+                            
                             try:
-                                more_button.evaluate("el => el.click()")
-                            except Exception as js_err:
-                                acc_state.add_log(f"Playwright locator.evaluate click on More button failed: {js_err}. Trying fallback locator click...", "warning")
-                                more_button.click(force=True)
-                            acc_state.add_log("Clicked More/... button. Waiting for dropdown...", "info")
-                            time.sleep(random.uniform(2.0, 3.0))
+                                page.keyboard.press("Escape")
+                                time.sleep(1.0)
+                            except:
+                                pass
+                            continue
 
                         dropdown_connect = None
                         # Broader set of selectors for Connect inside LinkedIn's More dropdown
@@ -1881,56 +2124,67 @@ def run_automation_worker_sync(account_id="default", config=None):
                         for selector in dropdown_connect_selectors:
                             try:
                                 btn = page.locator(selector).first
-                                if btn.is_visible():
+                                if btn.is_visible() and btn.is_enabled():
                                     dropdown_connect = btn
-                                    acc_state.add_log(f"Found 'Connect' in dropdown via: {selector}", "info")
+                                    acc_state.add_log(f"Found 'Connect' in dropdown via selector: {selector}", "info")
                                     break
                             except:
                                 pass
                         
-                        # Last resort: find via JS evaluation inside the dropdown
-                        if not dropdown_connect:
+                        if dropdown_connect and not clicked_connect:
+                            acc_state.add_log("Clicking 'Connect' in the 'More' dropdown menu...", "info")
                             try:
-                                acc_state.add_log("Trying JS-based Connect search inside dropdown...", "info")
-                                js_clicked = page.evaluate("""
+                                dropdown_connect.click(timeout=5000)
+                                clicked_connect = True
+                                acc_state.add_log("Successfully clicked 'Connect' in dropdown via Playwright.", "success")
+                            except Exception as err:
+                                acc_state.add_log(f"Playwright click failed: {err}. Trying fallback JS evaluate...", "warning")
+                                try:
+                                    dropdown_connect.evaluate("el => el.click()")
+                                    clicked_connect = True
+                                    acc_state.add_log("Successfully clicked 'Connect' in dropdown via JS fallback.", "success")
+                                except Exception as js_err:
+                                    acc_state.add_log(f"JS fallback click on dropdown Connect failed: {js_err}", "error")
+                        
+                        # Last resort: find via JS evaluation inside the dropdown
+                        if not clicked_connect:
+                            try:
+                                acc_state.add_log("Selector-based search missed dropdown 'Connect' — attempting JS-based deep search...", "info")
+                                js_dropdown_clicked = page.evaluate("""
                                     () => {
-                                        const items = document.querySelectorAll('[role="menuitem"], .artdeco-dropdown__item');
+                                        const items = document.querySelectorAll('[role="menuitem"], .artdeco-dropdown__item, .artdeco-dropdown button, [role="button"]');
                                         for (const item of items) {
                                             const text = (item.innerText || item.textContent || '').trim().toLowerCase();
-                                            if (text === 'connect' && !text.includes('remove')) {
+                                            // Flexible substring match that safely excludes "Remove" or "Connection"
+                                            if (text.includes('connect') && !text.includes('remove') && !text.includes('connection')) {
                                                 const btn = item.closest('button') || item.querySelector('button') || item.closest('div[role="button"]') || item;
-                                                if (btn && btn.offsetHeight > 0) {
-                                                    btn.click();
-                                                    return true;
+                                                if (btn) {
+                                                    const rect = btn.getBoundingClientRect();
+                                                    if (rect.width > 0 || rect.height > 0) {
+                                                        btn.click();
+                                                        return true;
+                                                    }
                                                 }
                                             }
                                         }
                                         return false;
                                     }
                                 """)
-                                if js_clicked:
+                                if js_dropdown_clicked:
                                     acc_state.add_log("JS-based click on 'Connect' in dropdown succeeded.", "success")
                                     clicked_connect = True
                             except Exception as js_err:
-                                acc_state.add_log(f"JS dropdown click failed: {js_err}", "warning")
+                                acc_state.add_log(f"JS dropdown deep click failed: {js_err}", "warning")
                                 
-                        if dropdown_connect and not clicked_connect:
-                            acc_state.add_log("Clicking 'Connect' in the 'More' dropdown menu...", "info")
-                            try:
-                                dropdown_connect.evaluate("el => el.click()")
-                            except Exception as js_err:
-                                acc_state.add_log(f"Playwright locator.evaluate click on dropdown Connect failed: {js_err}. Trying fallback locator click...", "warning")
-                                dropdown_connect.click(force=True)
-                            clicked_connect = True
-                        elif not clicked_connect:
+                        if not clicked_connect:
                             acc_state.add_log("Could not find 'Connect' in the 'More' dropdown. Taking screenshot for debug...", "warning")
                             detailed_fail_reason = "Connect option not found inside the 'More' dropdown menu (profile may have connection limits or require email verification)."
                             try:
-                                screenshot_dir = r"C:\Users\lenovo\.gemini\antigravity\brain\eeb3f292-7445-4086-bb03-812d2a3c527c"
-                                os.makedirs(screenshot_dir, exist_ok=True)
-                                page.screenshot(path=os.path.join(screenshot_dir, "debug_more_dropdown.png"))
-                            except:
-                                pass
+                                public_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
+                                page.screenshot(path=os.path.join(public_dir, "debug_more_dropdown.png"))
+                                acc_state.add_log("Saved debug dropdown screenshot to debug_more_dropdown.png", "info")
+                            except Exception as ss_err:
+                                acc_state.add_log(f"Failed to capture debug screenshot: {str(ss_err)}", "warning")
                             try:
                                 page.keyboard.press("Escape")
                                 time.sleep(1.0)
@@ -2064,7 +2318,8 @@ def run_automation_worker_sync(account_id="default", config=None):
                     # Re-evaluate JS to check if status is now Pending
                     verify_status_result = page.evaluate("""
                         () => {
-                            const topCard = document.querySelector('main section') || document.querySelector('main [class*="top-card"]') || document.querySelector('main');
+                            const h1 = document.querySelector('main h1');
+                            const topCard = h1 ? (h1.closest('section') || h1.closest('[class*="card"]') || h1.closest('div.ph5') || h1.parentElement.parentElement) : (document.querySelector('main section') || document.querySelector('main [class*="top-card"]'));
                             
                             // Check for success toast notification as a definitive fallback
                             const toasts = Array.from(document.querySelectorAll('.artdeco-toast-item'));
@@ -2083,7 +2338,7 @@ def run_automation_worker_sync(account_id="default", config=None):
                                 const text = el.textContent.trim().toLowerCase();
                                 const label = (el.getAttribute('aria-label') || '').toLowerCase();
                                 
-                                if (text === 'pending' || text === 'sent' || label.includes('pending') || label.includes('sent connection')) {
+                                if (text === 'pending' || text === 'sent' || text.includes('withdraw') || label.includes('pending') || label.includes('sent connection') || label.includes('withdraw')) {
                                     return true;
                                 }
                                 if (text.includes('pending') || text.includes('invitation sent') || text.includes('request sent')) {
@@ -2099,7 +2354,26 @@ def run_automation_worker_sync(account_id="default", config=None):
                         }
                     """)
                     if verify_status_result.get("status") != "Pending":
+                        acc_state.add_log("Initial verification failed. Refreshing page to confirm status...", "warning")
+                        try:
+                            page.reload(wait_until="domcontentloaded", timeout=20000)
+                            time.sleep(4)
+                            target_username = profile_url.split("/in/")[-1].split("/")[0].split('?')[0].rstrip('/')
+                            final_status = verify_profile_status(page, target_username, acc_state)
+                            if final_status == "Pending":
+                                acc_state.add_log("Verification passed after page reload: Profile now shows as 'Pending'.", "success")
+                                verify_status_result["status"] = "Pending"
+                        except Exception as reload_err:
+                            acc_state.add_log(f"Page reload verification failed: {str(reload_err)}", "warning")
+                            
+                    if verify_status_result.get("status") != "Pending":
                         acc_state.add_log("Verification failed: The 'Connect' button did not change to 'Pending'. The request was NOT actually sent.", "error")
+                        try:
+                            public_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public")
+                            os.makedirs(public_dir, exist_ok=True)
+                            page.screenshot(path=os.path.join(public_dir, f"debug_verify_failed.png"))
+                            acc_state.add_log("Captured debug screenshot of the failure: /debug_verify_failed.png", "info")
+                        except: pass
                         raise Exception("Failed to send request. LinkedIn blocked it or button not found.")
                     else:
                         acc_state.add_log("Verification passed: Profile now shows as 'Pending'.", "success")

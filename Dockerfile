@@ -1,5 +1,5 @@
 # Use the official Playwright Python image so browser dependencies and Chromium are already installed.
-FROM mcr.microsoft.com/playwright/python:1.60.0
+FROM mcr.microsoft.com/playwright/python:v1.60.0-jammy
 
 WORKDIR /app
 

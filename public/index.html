@@ -121,7 +121,7 @@
                         </div>
                     </div>
 
-                    <div class="glass-card metric-card metric-card--accent">
+                    <div class="glass-card metric-card">
                         <div class="metric-icon bg-teal"><i data-lucide="trending-up"></i></div>
                         <div class="metric-data">
                             <h4 id="admin-stat-avg-day">0<span class="metric-unit">/day</span></h4>
@@ -129,7 +129,7 @@
                         </div>
                     </div>
 
-                    <div class="glass-card metric-card metric-card--accent">
+                    <div class="glass-card metric-card">
                         <div class="metric-icon bg-pink"><i data-lucide="percent"></i></div>
                         <div class="metric-data">
                             <h4 id="admin-stat-accept-rate">0<span class="metric-unit">%</span></h4>
@@ -152,7 +152,7 @@
                             </span>
                         </div>
                         <div class="table-header-right">
-                            <div class="filter-dropdown-container" style="margin-right: 8px;">
+                            <div class="filter-dropdown-container" style="margin-right: 8px; display: none;">
                                 <select id="admin-status-filter" class="filter-select">
                                     <option value="all">All Statuses</option>
                                     <option value="Not Started">Not Started</option>
@@ -536,7 +536,7 @@
                                 </div>
                             </div>
 
-                            <div class="glass-card metric-card metric-card--accent">
+                            <div class="glass-card metric-card">
                                 <div class="metric-icon bg-teal"><i data-lucide="trending-up"></i></div>
                                 <div class="metric-data">
                                     <h4 id="stat-avg-day">0<span class="metric-unit">/day</span></h4>
@@ -544,7 +544,7 @@
                                 </div>
                             </div>
 
-                            <div class="glass-card metric-card metric-card--accent">
+                            <div class="glass-card metric-card">
                                 <div class="metric-icon bg-pink"><i data-lucide="percent"></i></div>
                                 <div class="metric-data">
                                     <h4 id="stat-accept-rate">0<span class="metric-unit">%</span></h4>
@@ -552,6 +552,16 @@
                                     <div class="accept-rate-bar-bg">
                                         <div class="accept-rate-bar-fill" id="accept-rate-bar" style="width:0%"></div>
                                     </div>
+                                </div>
+                            </div>
+
+
+
+                            <div class="glass-card metric-card">
+                                <div class="metric-icon bg-gray" style="background: var(--surface-hover); color: var(--text-muted);"><i data-lucide="circle-dashed"></i></div>
+                                <div class="metric-data">
+                                    <h4 id="stat-not-started">0</h4>
+                                    <p>Not Started</p>
                                 </div>
                             </div>
                         </div>
@@ -624,6 +634,9 @@
                                     <button id="btn-reset-contacts" class="btn btn-secondary-outline btn-sm" title="Reset contacts status to Not Started">
                                         <i data-lucide="rotate-ccw"></i> Reset
                                     </button>
+                                    <button id="btn-download-contacts" class="btn btn-primary btn-sm" style="margin-left: 8px;" title="Download contacts list">
+                                        <i data-lucide="download"></i> Download
+                                    </button>
                                 </div>
                             </div>
 
@@ -654,6 +667,7 @@
                                             <th>Company</th>
                                             <th>Profile URL</th>
                                             <th>Email / Phone</th>
+                                            <th>DOB</th>
                                             <th>Status</th>
                                             <th>Date Sent / Sync</th>
                                             <th style="width: 80px; text-align: center;">Action</th>
@@ -783,6 +797,6 @@
     </div>
 
     <!-- Frontend logic -->
-    <script src="app.js"></script>
+    <script src="app.js?v=2"></script>
 </body>
 </html>
