@@ -186,7 +186,7 @@ def get_accounts():
         pending_count = sum(1 for c in filtered_contacts if c.get("status") == "Pending")
         
         failed_count = sum(1 for c in filtered_contacts if c.get("status") == "Failed" and c.get("date_sent"))
-        sent_total = sum(1 for c in filtered_contacts if c.get("status") in ["Pending", "Connected"] and c.get("date_sent"))
+        sent_total = sum(1 for c in filtered_contacts if c.get("status") in ["Pending", "Connected"])
         
         # Calculate active days from date_sent
         days_active = set()

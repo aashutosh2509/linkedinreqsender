@@ -1842,7 +1842,7 @@ function refreshWorkspaceStats(contactsList = currentFilteredContacts) {
     const notStarted = contactsList.filter(c => c.status === "Not Started").length;
     
     // Total requests sent are computed from Sent, Pending, or Connected statuses
-    const sent = contactsList.filter(c => ["Sent", "Pending", "Connected"].includes(c.status) && c.date_sent).length;
+    const sent = contactsList.filter(c => ["Sent", "Pending", "Connected"].includes(c.status)).length;
     
     statTotal.textContent = total;
     statSent.textContent = sent;
