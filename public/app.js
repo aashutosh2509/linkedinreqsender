@@ -89,6 +89,11 @@ const btnToggleSidebar = document.getElementById("btn-toggle-sidebar");
 const toggleSidebarText = document.getElementById("toggle-sidebar-text");
 let isSidebarHidden = false;
 
+// Accounts Menu / Navigation Toggle Elements
+const btnToggleNav = document.getElementById("btn-toggle-nav");
+const toggleNavText = document.getElementById("toggle-nav-text");
+let isNavHidden = localStorage.getItem("isNavHidden") === "true";
+
 // Message Template
 const sendWithNoteCheckbox = document.getElementById("send-with-note");
 const noteTemplateContainer = document.getElementById("note-template-container");
@@ -156,6 +161,22 @@ const accProxyPass = document.getElementById("acc-proxy-pass");
 // ==========================================================================
 document.addEventListener("DOMContentLoaded", () => {
     lucide.createIcons();
+    
+    // Apply initial navigation visibility state
+    const appContainer = document.querySelector(".app-container");
+    if (appContainer) {
+        if (isNavHidden) {
+            appContainer.classList.add("navigation-hidden");
+            if (btnToggleNav) {
+                btnToggleNav.innerHTML = `<i data-lucide="menu"></i> <span id="toggle-nav-text">Show Menu</span>`;
+            }
+        } else {
+            appContainer.classList.remove("navigation-hidden");
+            if (btnToggleNav) {
+                btnToggleNav.innerHTML = `<i data-lucide="menu"></i> <span id="toggle-nav-text">Hide Menu</span>`;
+            }
+        }
+    }
     
     // Wire up events
     setupEventListeners();
@@ -249,18 +270,37 @@ function setupEventListeners() {
     btnSaveSettings.addEventListener("click", saveWorkspaceSettings);
     
     // Toggle sidebar visibility handler
-    btnToggleSidebar.addEventListener("click", () => {
-        const workspaceGrid = document.getElementById("workspace-dashboard-grid");
-        isSidebarHidden = !isSidebarHidden;
-        if (isSidebarHidden) {
-            workspaceGrid.classList.add("sidebar-hidden");
-            btnToggleSidebar.innerHTML = `<i data-lucide="layout-sidebar-off"></i> <span id="toggle-sidebar-text">Show Sidebar</span>`;
-        } else {
-            workspaceGrid.classList.remove("sidebar-hidden");
-            btnToggleSidebar.innerHTML = `<i data-lucide="layout-sidebar"></i> <span id="toggle-sidebar-text">Hide Sidebar</span>`;
-        }
-        lucide.createIcons();
-    });
+    if (btnToggleSidebar) {
+        btnToggleSidebar.addEventListener("click", () => {
+            const workspaceGrid = document.getElementById("workspace-dashboard-grid");
+            isSidebarHidden = !isSidebarHidden;
+            if (isSidebarHidden) {
+                workspaceGrid.classList.add("sidebar-hidden");
+                btnToggleSidebar.innerHTML = `<i data-lucide="sliders"></i> <span id="toggle-sidebar-text">Show Form</span>`;
+            } else {
+                workspaceGrid.classList.remove("sidebar-hidden");
+                btnToggleSidebar.innerHTML = `<i data-lucide="sliders"></i> <span id="toggle-sidebar-text">Hide Form</span>`;
+            }
+            lucide.createIcons();
+        });
+    }
+
+    // Toggle accounts menu visibility handler
+    if (btnToggleNav) {
+        btnToggleNav.addEventListener("click", () => {
+            const appContainer = document.querySelector(".app-container");
+            isNavHidden = !isNavHidden;
+            localStorage.setItem("isNavHidden", isNavHidden);
+            if (isNavHidden) {
+                appContainer.classList.add("navigation-hidden");
+                btnToggleNav.innerHTML = `<i data-lucide="menu"></i> <span id="toggle-nav-text">Show Menu</span>`;
+            } else {
+                appContainer.classList.remove("navigation-hidden");
+                btnToggleNav.innerHTML = `<i data-lucide="menu"></i> <span id="toggle-nav-text">Hide Menu</span>`;
+            }
+            lucide.createIcons();
+        });
+    }
     
     // Inline workspace rename handlers
     btnRenameWorkspace.addEventListener("click", () => startInlineRename());
@@ -536,8 +576,10 @@ async function switchWorkspace(accountId) {
             workspaceGrid.classList.remove("sidebar-hidden");
         }
         isSidebarHidden = false;
-        btnToggleSidebar.innerHTML = `<i data-lucide="layout-sidebar"></i> <span id="toggle-sidebar-text">Hide Sidebar</span>`;
-        btnToggleSidebar.style.display = "inline-flex";
+        if (btnToggleSidebar) {
+            btnToggleSidebar.innerHTML = `<i data-lucide="sliders"></i> <span id="toggle-sidebar-text">Hide Form</span>`;
+            btnToggleSidebar.style.display = "inline-flex";
+        }
         
         // Navigation styling state
         itemAdminTab.classList.remove("active");

@@ -134,6 +134,15 @@ body {
     grid-template-columns: 300px minmax(0, 1fr);
     gap: 24px;
     min-height: 100vh;
+    transition: grid-template-columns 0.3s ease;
+}
+
+.app-container.navigation-hidden {
+    grid-template-columns: 1fr;
+}
+
+.app-container.navigation-hidden .sidebar-navigation {
+    display: none;
 }
 
 /* Header Brand Navigation */
