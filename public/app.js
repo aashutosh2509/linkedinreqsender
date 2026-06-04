@@ -1819,9 +1819,6 @@ async function fetchWorkspaceContacts() {
         if (!response.ok) return;
         
         localContacts = await response.json();
-        currentFilteredContacts = localContacts;
-        
-        refreshWorkspaceStats();
         renderWorkspaceTable();
         
         if (!isSystemRunning) {
