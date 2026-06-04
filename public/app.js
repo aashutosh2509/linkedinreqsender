@@ -84,6 +84,11 @@ const btnRenameWorkspace = document.getElementById("btn-rename-workspace");
 const btnRenameConfirm = document.getElementById("btn-rename-confirm");
 const btnRenameCancel = document.getElementById("btn-rename-cancel");
 
+// Sidebar Toggle Elements
+const btnToggleSidebar = document.getElementById("btn-toggle-sidebar");
+const toggleSidebarText = document.getElementById("toggle-sidebar-text");
+let isSidebarHidden = false;
+
 // Message Template
 const sendWithNoteCheckbox = document.getElementById("send-with-note");
 const noteTemplateContainer = document.getElementById("note-template-container");
@@ -242,6 +247,20 @@ function setupEventListeners() {
     btnSync.addEventListener("click", syncAcceptedRequests);
     btnClearLogs.addEventListener("click", clearLogsPanel);
     btnSaveSettings.addEventListener("click", saveWorkspaceSettings);
+    
+    // Toggle sidebar visibility handler
+    btnToggleSidebar.addEventListener("click", () => {
+        const workspaceGrid = document.getElementById("workspace-dashboard-grid");
+        isSidebarHidden = !isSidebarHidden;
+        if (isSidebarHidden) {
+            workspaceGrid.classList.add("sidebar-hidden");
+            btnToggleSidebar.innerHTML = `<i data-lucide="layout-sidebar-off"></i> <span id="toggle-sidebar-text">Show Sidebar</span>`;
+        } else {
+            workspaceGrid.classList.remove("sidebar-hidden");
+            btnToggleSidebar.innerHTML = `<i data-lucide="layout-sidebar"></i> <span id="toggle-sidebar-text">Hide Sidebar</span>`;
+        }
+        lucide.createIcons();
+    });
     
     // Inline workspace rename handlers
     btnRenameWorkspace.addEventListener("click", () => startInlineRename());
@@ -484,6 +503,7 @@ async function switchWorkspace(accountId) {
         viewWorkspace.classList.remove("active");
         viewWorkspace.style.display = "none";
         viewAdmin.style.display = "block";
+        btnToggleSidebar.style.display = "none"; // Hide toggle on admin view
         
         // Navigation styling active state
         itemAdminTab.classList.add("active");
@@ -509,6 +529,15 @@ async function switchWorkspace(accountId) {
         viewAdmin.style.display = "none";
         viewWorkspace.classList.add("active");
         viewWorkspace.style.display = "grid";
+        
+        // Reset sidebar state to visible by default when entering a workspace
+        const workspaceGrid = document.getElementById("workspace-dashboard-grid");
+        if (workspaceGrid) {
+            workspaceGrid.classList.remove("sidebar-hidden");
+        }
+        isSidebarHidden = false;
+        btnToggleSidebar.innerHTML = `<i data-lucide="layout-sidebar"></i> <span id="toggle-sidebar-text">Hide Sidebar</span>`;
+        btnToggleSidebar.style.display = "inline-flex";
         
         // Navigation styling state
         itemAdminTab.classList.remove("active");

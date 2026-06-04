@@ -76,7 +76,10 @@
                     <p id="workspace-subtitle">Aggregated system-wide analytics & stats</p>
                 </div>
                 
-                <div class="header-status">
+                <div class="header-status" style="display: flex; gap: 12px; align-items: center;">
+                    <button id="btn-toggle-sidebar" class="btn btn-secondary btn-sm" style="display: none; align-items: center; gap: 6px; margin: 0;" title="Toggle sidebar visibility">
+                        <i data-lucide="layout-sidebar"></i> <span id="toggle-sidebar-text">Hide Sidebar</span>
+                    </button>
                     <div class="status-indicator">
                         <span class="pulse-dot grey-pulse" id="system-status-dot"></span>
                         <span id="system-status-text">System Idle</span>
@@ -224,7 +227,7 @@
 
             <!-- 2. SPECIFIC ACCOUNT WORKSPACE VIEW -->
             <div id="view-workspace" class="view-panel" style="display: none;">
-                <main class="dashboard-grid">
+                <main class="dashboard-grid" id="workspace-dashboard-grid">
                     
                     <!-- LEFT PANEL: WORKSPACE CONTROLS -->
                     <section class="control-sidebar">
