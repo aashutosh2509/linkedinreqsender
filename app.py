@@ -199,7 +199,7 @@ def get_accounts():
                     pass
                     
         acc["stats"] = {
-            "total": len(filtered_contacts),
+            "total": len(contacts),
             "sent": sent_total,
             "connected": all_connected,
             "bot_connected": bot_connected,

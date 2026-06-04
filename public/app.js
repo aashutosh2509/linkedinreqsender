@@ -1833,7 +1833,7 @@ async function fetchWorkspaceContacts() {
 }
 
 function refreshWorkspaceStats(contactsList = currentFilteredContacts) {
-    const total = contactsList.length;
+    const total = localContacts.length;
     const pending = contactsList.filter(c => c.status === "Pending").length;
     const connected = contactsList.filter(c => c.status === "Connected").length;
 
