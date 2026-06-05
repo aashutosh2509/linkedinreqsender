@@ -1082,81 +1082,29 @@ def verify_profile_status(page, username, acc_state):
                 const nameHeader = document.querySelector('main h1');
                 const topCard = nameHeader ? (nameHeader.closest('.artdeco-card') || nameHeader.closest('section') || nameHeader.parentElement?.parentElement?.parentElement || document) : (document.querySelector('main section') || document);
                 
-                if (!topCard) return { status: "Not Started" };
-                
                 const actions = Array.from(topCard.querySelectorAll('button, a'));
                 
-                // 1. Check for explicit "Remove Connection" anywhere in topCard (including hidden dropdown items)
-                const hasRemoveConnection = actions.some(el => {
+                // 1. First check: Is there a visible "Connect" button in the top card?
+                // If yes, the profile is 100% Not Started (Not Connected).
+                const hasConnect = actions.some(el => {
+                    if (!el.offsetHeight && !el.offsetWidth) return false;
                     const text = el.textContent.trim().toLowerCase();
                     const label = (el.getAttribute('aria-label') || '').toLowerCase();
-                    return text.includes('remove connection') || text.includes('remove first-degree') || label.includes('remove connection') || label.includes('remove first-degree');
+                    return (text === 'connect' || (label.includes('invite') && label.includes('connect'))) && !text.includes('remove') && !label.includes('remove');
                 });
-                if (hasRemoveConnection) {
-                    return { status: "Connected" };
+                
+                if (hasConnect) {
+                    return { status: "Not Started" };
                 }
                 
-                // 2. Check for Message button that is not InMail/locked (tells us they are a 1st degree connection)
-                const hasMessageBtn = actions.some(el => {
-                    const text = el.textContent.trim().toLowerCase();
-                    const label = (el.getAttribute('aria-label') || '').toLowerCase();
-                    const hasMessageText = (text === 'message' || label.includes('message'));
-                    if (hasMessageText) {
-                        const html = el.innerHTML.toLowerCase();
-                        const isLocked = html.includes('lock') || text.includes('inmail') || label.includes('inmail') || label.includes('locked');
-                        return !isLocked;
-                    }
-                    return false;
-                });
-                if (hasMessageBtn) {
-                    return { status: "Connected" };
-                }
-                
-                // 3. Check for messaging thread link
-                const hasMessageThread = actions.some(el => {
-                    const href = el.getAttribute('href') || '';
-                    return href.includes('/messaging/thread/');
-                });
-                if (hasMessageThread) {
-                    return { status: "Connected" };
-                }
-                
-                // 4. Scan for explicit connection degree badges (NO visibility check!)
-                const allElements = Array.from(topCard.querySelectorAll('span, div, button, a, em, strong'));
-                let degree = null;
-                for (const el of allElements) {
-                    const text = el.textContent.trim().toLowerCase();
-                    const classes = Array.from(el.classList || []);
-                    const isDistClass = classes.some(cls => cls.includes('dist') || cls.includes('degree') || cls.includes('badge'));
-                    
-                    const cleanText = text.replace(/[\s•·\.\,ºª]/g, '').toLowerCase();
-                    if (cleanText === '1st' || cleanText.includes('1stdegree') || cleanText === '1er') {
-                        degree = "1st";
-                        break;
-                    }
-                    if (cleanText === '2nd' || cleanText.includes('2nddegree') || cleanText === '2nd' ||
-                        cleanText === '3rd' || cleanText.includes('3rddegree') || cleanText === '3rd') {
-                        degree = "other";
-                    }
-                    if (isDistClass && (text.includes('1st') || text.includes('1er') || text.includes('1.'))) {
-                        degree = "1st";
-                        break;
-                    }
-                    if (isDistClass && (text.includes('2nd') || text.includes('3rd') || text.includes('2.') || text.includes('3.'))) {
-                        degree = "other";
-                    }
-                }
-                
-                if (degree === "1st") {
-                    return { status: "Connected" };
-                }
-                
-                // 5. Check for "Pending" / "Sent" / "Request sent" / "Withdraw" (NO visibility check!)
+                // 2. Second check: Is there a visible "Pending" / "Sent" / "Request sent" button in the top card?
+                // If yes, the profile connection is Pending.
                 const hasPending = actions.some(el => {
+                    if (!el.offsetHeight && !el.offsetWidth) return false;
                     const text = el.textContent.trim().toLowerCase();
                     const label = (el.getAttribute('aria-label') || '').toLowerCase();
                     
-                    if (text === 'pending' || text === 'sent' || text.includes('withdraw') || label.includes('pending') || label.includes('sent connection') || label.includes('withdraw')) {
+                    if (text === 'pending' || text === 'sent' || label.includes('pending') || label.includes('sent connection')) {
                         return true;
                     }
                     if (text.includes('pending') || text.includes('invitation sent') || text.includes('request sent')) {
@@ -1169,23 +1117,50 @@ def verify_profile_status(page, username, acc_state):
                     return { status: "Pending" };
                 }
                 
-                // 6. Check for "Connect" button in the top card
-                const hasDirectConnect = actions.some(el => {
-                    const text = el.textContent.trim().toLowerCase();
-                    const label = (el.getAttribute('aria-label') || '').toLowerCase();
-                    return (text === 'connect' || (label.includes('invite') && label.includes('connect'))) && !text.includes('remove') && !label.includes('remove');
-                });
-                
-                if (hasDirectConnect) {
-                    return { status: "Not Started" };
+                // 3. Third check: Scan for explicit connection degree badges in the top card
+                const allSpans = Array.from(topCard.querySelectorAll('span, div, button, a'));
+                let degree = null;
+                for (const el of allSpans) {
+                    if (!el.offsetHeight && !el.offsetWidth) continue;
+                    const text = el.textContent.trim();
+                    if (/\b1st\b/i.test(text)) {
+                        if (text.length < 30 && !text.toLowerCase().includes("class") && !text.toLowerCase().includes("year") && !text.toLowerCase().includes("anniversary")) {
+                            degree = "1st";
+                            break;
+                        }
+                    }
+                    if (/\b(2nd|3rd)\b/i.test(text)) {
+                        if (text.length < 30 && !text.toLowerCase().includes("class") && !text.toLowerCase().includes("year") && !text.toLowerCase().includes("anniversary")) {
+                            degree = "other";
+                            break;
+                        }
+                    }
                 }
                 
-                // 7. If degree is other (2nd/3rd degree), and not pending, it's Not Started
-                if (degree === "other") {
-                    return { status: "Not Started" };
+                if (degree === "1st") {
+                    return { status: "Connected" };
                 }
                 
-                // Default fallback
+                // 4. Fourth check: If degree is not other, verify if there's a Messaging thread link or valid Message button
+                if (degree !== "other") {
+                    for (const el of actions) {
+                        if (!el.offsetHeight && !el.offsetWidth) continue;
+                        const text = el.textContent.trim().toLowerCase();
+                        const label = (el.getAttribute('aria-label') || '').toLowerCase();
+                        const href = el.getAttribute('href') || '';
+                        
+                        if (href.includes('/messaging/thread/')) {
+                            return { status: "Connected" };
+                        }
+                        
+                        if (text === 'message' || label === 'message' || label.startsWith('message ') || text.startsWith('message ')) {
+                            if (!text.includes('inmail') && !label.includes('inmail') && !label.includes('premium')) {
+                                return { status: "Connected" };
+                            }
+                        }
+                    }
+                }
+                
                 return { status: "Not Started" };
             }
         """)
@@ -1712,85 +1687,32 @@ def run_automation_worker_sync(account_id="default", config=None):
                 # Robust JS-based connection status checker (scoped strictly to profile top card section & degree-aware)
                 status_result = page.evaluate("""
                     () => {
-                        // Scope STRICTLY to the first section of main to completely exclude sidebar elements (recommending other profiles)
                         const nameHeader = document.querySelector('main h1');
                         const topCard = nameHeader ? (nameHeader.closest('.artdeco-card') || nameHeader.closest('section') || nameHeader.parentElement?.parentElement?.parentElement || document) : (document.querySelector('main section') || document);
                         
-                        if (!topCard) return { status: "Not Started" };
-                        
                         const actions = Array.from(topCard.querySelectorAll('button, a'));
                         
-                        // 1. Check for explicit "Remove Connection" anywhere in topCard (including hidden dropdown items)
-                        const hasRemoveConnection = actions.some(el => {
+                        // 1. First check: Is there a visible "Connect" button in the top card?
+                        // If yes, the profile is 100% Not Started (Not Connected).
+                        const hasConnect = actions.some(el => {
+                            if (!el.offsetHeight && !el.offsetWidth) return false;
                             const text = el.textContent.trim().toLowerCase();
                             const label = (el.getAttribute('aria-label') || '').toLowerCase();
-                            return text.includes('remove connection') || text.includes('remove first-degree') || label.includes('remove connection') || label.includes('remove first-degree');
+                            return (text === 'connect' || (label.includes('invite') && label.includes('connect'))) && !text.includes('remove') && !label.includes('remove');
                         });
-                        if (hasRemoveConnection) {
-                            return { status: "Connected" };
+                        
+                        if (hasConnect) {
+                            return { status: "Not Started" };
                         }
                         
-                        // 2. Check for Message button that is not InMail/locked (tells us they are a 1st degree connection)
-                        const hasMessageBtn = actions.some(el => {
-                            const text = el.textContent.trim().toLowerCase();
-                            const label = (el.getAttribute('aria-label') || '').toLowerCase();
-                            const hasMessageText = (text === 'message' || label.includes('message'));
-                            if (hasMessageText) {
-                                const html = el.innerHTML.toLowerCase();
-                                const isLocked = html.includes('lock') || text.includes('inmail') || label.includes('inmail') || label.includes('locked');
-                                return !isLocked;
-                            }
-                            return false;
-                        });
-                        if (hasMessageBtn) {
-                            return { status: "Connected" };
-                        }
-                        
-                        // 3. Check for messaging thread link
-                        const hasMessageThread = actions.some(el => {
-                            const href = el.getAttribute('href') || '';
-                            return href.includes('/messaging/thread/');
-                        });
-                        if (hasMessageThread) {
-                            return { status: "Connected" };
-                        }
-                        
-                        // 4. Scan for explicit connection degree badges (NO visibility check!)
-                        const allElements = Array.from(topCard.querySelectorAll('span, div, button, a, em, strong'));
-                        let degree = null;
-                        for (const el of allElements) {
-                            const text = el.textContent.trim().toLowerCase();
-                            const classes = Array.from(el.classList || []);
-                            const isDistClass = classes.some(cls => cls.includes('dist') || cls.includes('degree') || cls.includes('badge'));
-                            
-                            const cleanText = text.replace(/[\s•·\.\,ºª]/g, '').toLowerCase();
-                            if (cleanText === '1st' || cleanText.includes('1stdegree') || cleanText === '1er') {
-                                degree = "1st";
-                                break;
-                            }
-                            if (cleanText === '2nd' || cleanText.includes('2nddegree') || cleanText === '2nd' ||
-                                cleanText === '3rd' || cleanText.includes('3rddegree') || cleanText === '3rd') {
-                                degree = "other";
-                            }
-                            if (isDistClass && (text.includes('1st') || text.includes('1er') || text.includes('1.'))) {
-                                degree = "1st";
-                                break;
-                            }
-                            if (isDistClass && (text.includes('2nd') || text.includes('3rd') || text.includes('2.') || text.includes('3.'))) {
-                                degree = "other";
-                            }
-                        }
-                        
-                        if (degree === "1st") {
-                            return { status: "Connected" };
-                        }
-                        
-                        // 5. Check for "Pending" / "Sent" / "Request sent" / "Withdraw" (NO visibility check!)
+                        // 2. Second check: Is there a visible "Pending" / "Sent" / "Request sent" button in the top card?
+                        // If yes, the profile connection is Pending.
                         const hasPending = actions.some(el => {
+                            if (!el.offsetHeight && !el.offsetWidth) return false;
                             const text = el.textContent.trim().toLowerCase();
                             const label = (el.getAttribute('aria-label') || '').toLowerCase();
                             
-                            if (text === 'pending' || text === 'sent' || text.includes('withdraw') || label.includes('pending') || label.includes('sent connection') || label.includes('withdraw')) {
+                            if (text === 'pending' || text === 'sent' || label.includes('pending') || label.includes('sent connection')) {
                                 return true;
                             }
                             if (text.includes('pending') || text.includes('invitation sent') || text.includes('request sent')) {
@@ -1803,23 +1725,50 @@ def run_automation_worker_sync(account_id="default", config=None):
                             return { status: "Pending" };
                         }
                         
-                        // 6. Check for "Connect" button in the top card
-                        const hasDirectConnect = actions.some(el => {
-                            const text = el.textContent.trim().toLowerCase();
-                            const label = (el.getAttribute('aria-label') || '').toLowerCase();
-                            return (text === 'connect' || (label.includes('invite') && label.includes('connect'))) && !text.includes('remove') && !label.includes('remove');
-                        });
-                        
-                        if (hasDirectConnect) {
-                            return { status: "Not Started" };
+                        // 3. Third check: Scan for explicit connection degree badges in the top card
+                        const allSpans = Array.from(topCard.querySelectorAll('span, div, button, a'));
+                        let degree = null;
+                        for (const el of allSpans) {
+                            if (!el.offsetHeight && !el.offsetWidth) continue;
+                            const text = el.textContent.trim();
+                            if (/\b1st\b/i.test(text)) {
+                                if (text.length < 30 && !text.toLowerCase().includes("class") && !text.toLowerCase().includes("year") && !text.toLowerCase().includes("anniversary")) {
+                                    degree = "1st";
+                                    break;
+                                }
+                            }
+                            if (/\b(2nd|3rd)\b/i.test(text)) {
+                                if (text.length < 30 && !text.toLowerCase().includes("class") && !text.toLowerCase().includes("year") && !text.toLowerCase().includes("anniversary")) {
+                                    degree = "other";
+                                    break;
+                                }
+                            }
                         }
                         
-                        // 7. If degree is other (2nd/3rd degree), and not pending, it's Not Started
-                        if (degree === "other") {
-                            return { status: "Not Started" };
+                        if (degree === "1st") {
+                            return { status: "Connected" };
                         }
                         
-                        // Default fallback
+                        // 4. Fourth check: If degree is not other, verify if there's a Messaging thread link or valid Message button
+                        if (degree !== "other") {
+                            for (const el of actions) {
+                                if (!el.offsetHeight && !el.offsetWidth) continue;
+                                const text = el.textContent.trim().toLowerCase();
+                                const label = (el.getAttribute('aria-label') || '').toLowerCase();
+                                const href = el.getAttribute('href') || '';
+                                
+                                if (href.includes('/messaging/thread/')) {
+                                    return { status: "Connected" };
+                                }
+                                
+                                if (text === 'message' || label === 'message' || label.startsWith('message ') || text.startsWith('message ')) {
+                                    if (!text.includes('inmail') && !label.includes('inmail') && !label.includes('premium')) {
+                                        return { status: "Connected" };
+                                    }
+                                }
+                            }
+                        }
+                        
                         return { status: "Not Started" };
                     }
                 """)
