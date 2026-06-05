@@ -857,8 +857,8 @@ def scrape_contact_info(page, username, account_id="default"):
                                document.querySelector('dialog[open]') ||
                                document.querySelector('[data-testid="dialog"]') ||
                                document.querySelector('[role="dialog"].artdeco-modal') ||
-                               document.querySelector('[role="dialog"]') ||
-                               document;
+                               document.querySelector('[role="dialog"]');
+                if (!dialog) return null;
                 
                 // 1. Try finding mailto link
                 let links = Array.from(dialog.querySelectorAll('a[href^="mailto:"]'));
@@ -901,8 +901,8 @@ def scrape_contact_info(page, username, account_id="default"):
                                document.querySelector('dialog[open]') ||
                                document.querySelector('[data-testid="dialog"]') ||
                                document.querySelector('[role="dialog"].artdeco-modal') ||
-                               document.querySelector('[role="dialog"]') ||
-                               document;
+                               document.querySelector('[role="dialog"]');
+                if (!dialog) return null;
                 
                 // 1. Try tel: link
                 const telLink = dialog.querySelector('a[href^="tel:"]');
@@ -950,8 +950,8 @@ def scrape_contact_info(page, username, account_id="default"):
                                document.querySelector('dialog[open]') ||
                                document.querySelector('[data-testid="dialog"]') ||
                                document.querySelector('[role="dialog"].artdeco-modal') ||
-                               document.querySelector('[role="dialog"]') ||
-                               document;
+                               document.querySelector('[role="dialog"]');
+                if (!dialog) return null;
                 
                 const text = dialog.innerText || dialog.textContent || '';
                 const lines = text.split('\n').map(l => l.trim()).filter(l => l);
@@ -1005,8 +1005,8 @@ def scrape_contact_info(page, username, account_id="default"):
                                document.querySelector('dialog[open]') ||
                                document.querySelector('[data-testid="dialog"]') ||
                                document.querySelector('[role="dialog"].artdeco-modal') ||
-                               document.querySelector('[role="dialog"]') ||
-                               document;
+                               document.querySelector('[role="dialog"]');
+                if (!dialog) return null;
                 
                 const text = dialog.innerText || dialog.textContent || '';
                 const lines = text.split('\n').map(l => l.trim()).filter(l => l);
@@ -1118,22 +1118,20 @@ def verify_profile_status(page, username, acc_state):
                 }
                 
                 // 3. Third check: Scan for explicit connection degree badges in the top card
-                const allSpans = Array.from(topCard.querySelectorAll('span, div, button, a'));
+                const badgeElements = Array.from(topCard.querySelectorAll('span, p, div, button, a'));
                 let degree = null;
-                for (const el of allSpans) {
-                    if (!el.offsetHeight && !el.offsetWidth) continue;
-                    const text = el.textContent.trim();
-                    if (/\b1st\b/i.test(text)) {
-                        if (text.length < 30 && !text.toLowerCase().includes("class") && !text.toLowerCase().includes("year") && !text.toLowerCase().includes("anniversary")) {
-                            degree = "1st";
-                            break;
-                        }
+                for (const el of badgeElements) {
+                    if (el.children.length > 0) continue; // Only check leaf elements to avoid combined text from container divs
+                    if (!el.offsetHeight && !el.offsetWidth) continue; // Must be visible
+                    
+                    const text = el.textContent.replace(/[\s•·\.\,ºª]/g, '').toLowerCase();
+                    if (text === '1st' || text === '1stdegree') {
+                        degree = "1st";
+                        break;
                     }
-                    if (/\b(2nd|3rd)\b/i.test(text)) {
-                        if (text.length < 30 && !text.toLowerCase().includes("class") && !text.toLowerCase().includes("year") && !text.toLowerCase().includes("anniversary")) {
-                            degree = "other";
-                            break;
-                        }
+                    if (text === '2nd' || text === '3rd' || text === '2nddegree' || text === '3rddegree') {
+                        degree = "other";
+                        break;
                     }
                 }
                 
@@ -1141,22 +1139,13 @@ def verify_profile_status(page, username, acc_state):
                     return { status: "Connected" };
                 }
                 
-                // 4. Fourth check: If degree is not other, verify if there's a Messaging thread link or valid Message button
+                // 4. Fourth check: If degree is not other, verify if there's an active messaging thread link
                 if (degree !== "other") {
                     for (const el of actions) {
                         if (!el.offsetHeight && !el.offsetWidth) continue;
-                        const text = el.textContent.trim().toLowerCase();
-                        const label = (el.getAttribute('aria-label') || '').toLowerCase();
                         const href = el.getAttribute('href') || '';
-                        
                         if (href.includes('/messaging/thread/')) {
                             return { status: "Connected" };
-                        }
-                        
-                        if (text === 'message' || label === 'message' || label.startsWith('message ') || text.startsWith('message ')) {
-                            if (!text.includes('inmail') && !label.includes('inmail') && !label.includes('premium')) {
-                                return { status: "Connected" };
-                            }
                         }
                     }
                 }
@@ -1685,7 +1674,7 @@ def run_automation_worker_sync(account_id="default", config=None):
                 HEADER_ANCHOR = "xpath=//main//*[self::section or contains(@class, 'card') or contains(@class, 'top-card')][.//h1][1]"
                 
                 # Robust JS-based connection status checker (scoped strictly to profile top card section & degree-aware)
-                status_result = page.evaluate("""
+                status_result = page.evaluate(r"""
                     () => {
                         const nameHeader = document.querySelector('main h1');
                         const topCard = nameHeader ? (nameHeader.closest('.artdeco-card') || nameHeader.closest('section') || nameHeader.parentElement?.parentElement?.parentElement || document) : (document.querySelector('main section') || document);
@@ -1726,22 +1715,20 @@ def run_automation_worker_sync(account_id="default", config=None):
                         }
                         
                         // 3. Third check: Scan for explicit connection degree badges in the top card
-                        const allSpans = Array.from(topCard.querySelectorAll('span, div, button, a'));
+                        const badgeElements = Array.from(topCard.querySelectorAll('span, p, div, button, a'));
                         let degree = null;
-                        for (const el of allSpans) {
-                            if (!el.offsetHeight && !el.offsetWidth) continue;
-                            const text = el.textContent.trim();
-                            if (/\b1st\b/i.test(text)) {
-                                if (text.length < 30 && !text.toLowerCase().includes("class") && !text.toLowerCase().includes("year") && !text.toLowerCase().includes("anniversary")) {
-                                    degree = "1st";
-                                    break;
-                                }
+                        for (const el of badgeElements) {
+                            if (el.children.length > 0) continue; // Only check leaf elements to avoid combined text from container divs
+                            if (!el.offsetHeight && !el.offsetWidth) continue; // Must be visible
+                            
+                            const text = el.textContent.replace(/[\s•·\.\,ºª]/g, '').toLowerCase();
+                            if (text === '1st' || text === '1stdegree') {
+                                degree = "1st";
+                                break;
                             }
-                            if (/\b(2nd|3rd)\b/i.test(text)) {
-                                if (text.length < 30 && !text.toLowerCase().includes("class") && !text.toLowerCase().includes("year") && !text.toLowerCase().includes("anniversary")) {
-                                    degree = "other";
-                                    break;
-                                }
+                            if (text === '2nd' || text === '3rd' || text === '2nddegree' || text === '3rddegree') {
+                                degree = "other";
+                                break;
                             }
                         }
                         
@@ -1749,22 +1736,13 @@ def run_automation_worker_sync(account_id="default", config=None):
                             return { status: "Connected" };
                         }
                         
-                        // 4. Fourth check: If degree is not other, verify if there's a Messaging thread link or valid Message button
+                        // 4. Fourth check: If degree is not other, verify if there's an active messaging thread link
                         if (degree !== "other") {
                             for (const el of actions) {
                                 if (!el.offsetHeight && !el.offsetWidth) continue;
-                                const text = el.textContent.trim().toLowerCase();
-                                const label = (el.getAttribute('aria-label') || '').toLowerCase();
                                 const href = el.getAttribute('href') || '';
-                                
                                 if (href.includes('/messaging/thread/')) {
                                     return { status: "Connected" };
-                                }
-                                
-                                if (text === 'message' || label === 'message' || label.startsWith('message ') || text.startsWith('message ')) {
-                                    if (!text.includes('inmail') && !label.includes('inmail') && !label.includes('premium')) {
-                                        return { status: "Connected" };
-                                    }
                                 }
                             }
                         }

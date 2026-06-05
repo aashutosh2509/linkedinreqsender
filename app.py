@@ -123,7 +123,6 @@ def validate_and_normalize_linkedin_url(url):
         clean_url,
         flags=re.IGNORECASE
     )
-    
     return clean_url, None
 
 # Serves frontend files
