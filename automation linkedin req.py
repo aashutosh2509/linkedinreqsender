@@ -1054,6 +1054,23 @@ def run_automation_worker_sync(account_id="default", config=None):
                         acc_state.add_log(f"Failed to capture debug screenshot: {str(ss_err)}", "warning")
 
                 time.sleep(random.uniform(3, 5))
+                
+                # First, force-close any open chat boxes on the screen to prevent interference
+                try:
+                    page.evaluate("""() => {
+                        const bubbles = document.querySelectorAll('.msg-overlay-conversation-bubble, aside.msg-overlay-container');
+                        bubbles.forEach(bubble => {
+                            const closeBtns = bubble.querySelectorAll('button[aria-label^="Close"], button[aria-label^="Dismiss"], svg[data-test-icon*="close"]');
+                            closeBtns.forEach(btn => {
+                                const target = btn.tagName === 'BUTTON' ? btn : btn.closest('button');
+                                if (target) target.click();
+                            });
+                        });
+                    }""")
+                    time.sleep(1)
+                except:
+                    pass
+                    
                 page.evaluate("window.scrollTo(0, 300)")
                 time.sleep(1.5)
                 
