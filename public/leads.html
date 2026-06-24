@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leads CRM - LinkConnect Elite</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .crm-container { width: 100%; max-width: 100%; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 24px; min-height: 100vh; box-sizing: border-box; }
+        .crm-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 32px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 20px; backdrop-filter: blur(12px); box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03); position: relative; z-index: 9999; }
+        .metrics-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; position: relative; z-index: 1; }
+        .metric-card.leads { background: linear-gradient(135deg, rgba(124, 58, 237, 0.05), rgba(2, 132, 199, 0.05)); border: 1px solid rgba(124, 58, 237, 0.15); }
+        .filter-bar { display: flex; gap: 16px; align-items: center; background: var(--bg-surface); padding: 16px 24px; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
+        .search-wrapper { position: relative; flex-grow: 1; }
+        .search-wrapper i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); width: 18px; height: 18px; }
+        .search-wrapper input { padding-left: 40px; width: 100%; background: rgba(255,255,255,0.8); border: 1px solid var(--border-color); border-radius: 10px; padding-top: 10px; padding-bottom: 10px; }
+        .status-badge.hot { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
+        .status-badge.warm { background: rgba(217, 119, 6, 0.1); color: #d97706; border: 1px solid rgba(217, 119, 6, 0.2); }
+    </style>
+</head>
+<body>
+    <div class="glow-bg-elements">
+        <div class="glow-sphere glow-1"></div>
+        <div class="glow-sphere glow-2"></div>
+        <div class="glow-sphere glow-3"></div>
+    </div>
+    <div class="app-container">
+        <!-- LEFT SIDEBAR -->
+        <aside class="sidebar-navigation">
+            <div class="logo-area">
+                <img src="logo.png" alt="NB Entrepreneurs Logo" style="height: 48px; width: auto; object-fit: contain;">
+                <div class="logo-text">
+                    <h1><span style="background: none; -webkit-text-fill-color: #008eda; color: #008eda; display: inline;">LKD</span><span>Connect</span></h1>
+                    <p>MULTI-ACCOUNT HUB</p>
+                </div>
+            </div>
+            
+            <div class="sidebar-section-title">ADMINISTRATOR</div>
+            <div class="accounts-menu-list">
+                <button class="account-item" onclick="window.close()">
+                    <div class="item-icon bg-gradient-admin"><i data-lucide="layout-dashboard"></i></div>
+                    <div class="item-info">
+                        <span class="acc-name">Admin Dashboard</span>
+                        <span class="acc-status">Return to Main App</span>
+                    </div>
+                </button>
+                <button class="account-item active" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(249, 115, 22, 0.05)); border: 1px solid rgba(239,68,68,0.2); margin-top: 8px;">
+                    <div class="item-icon" style="background: linear-gradient(135deg, #ef4444, #f97316); box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);"><i data-lucide="flame"></i></div>
+                    <div class="item-info">
+                        <span class="acc-name" style="color: #ef4444; font-weight: 700;">Leads CRM</span>
+                        <span class="acc-status">Hot Pipeline</span>
+                    </div>
+                </button>
+            </div>
+
+            <div class="sidebar-section-title">LINKEDIN ACCOUNTS</div>
+            <div class="accounts-menu-list scrollable-accounts-list" id="sidebar-accounts-list">
+                <!-- Dynamically populated -->
+            </div>
+        </aside>
+
+        <!-- RIGHT SIDE: WORKSPACE WRAPPER -->
+        <div class="workspace-container" style="overflow-y: auto; height: 100vh;">
+            <div class="crm-container">
+        <!-- HEADER -->
+        <header class="crm-header">
+            <div class="logo-area">
+                <div class="logo-icon" style="background: linear-gradient(135deg, #ef4444, #f97316); box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);">
+                    <i data-lucide="flame"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>Leads <span>CRM</span></h1>
+                    <p>EXCLUSIVE HOT PIPELINE</p>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 16px; align-items: center;">
+                <button class="btn btn-secondary-outline" onclick="window.close()" style="width: auto;">
+                    <i data-lucide="x"></i> Close CRM
+                </button>
+            </div>
+        </header>
+        <!-- METRICS -->
+        <div class="metrics-bar">
+            <div class="glass-card metric-card metric-card.leads">
+                <div class="metric-icon" style="background: #ef4444;"><i data-lucide="users"></i></div>
+                <div class="metric-data">
+                    <h4 id="stat-total-leads">0</h4>
+                    <p>Total Leads</p>
+                </div>
+            </div>
+            <div class="glass-card metric-card">
+                <div class="metric-icon bg-green"><i data-lucide="check-circle"></i></div>
+                <div class="metric-data">
+                    <h4 id="stat-connected">0</h4>
+                    <p>Connected</p>
+                </div>
+            </div>
+            <div class="glass-card metric-card">
+                <div class="metric-icon bg-purple"><i data-lucide="message-circle"></i></div>
+                <div class="metric-data">
+                    <h4 id="stat-messaged">0</h4>
+                    <p>Messaged</p>
+                </div>
+            </div>
+            <div class="glass-card metric-card">
+                <div class="metric-icon" style="background: linear-gradient(135deg, #ef4444, #f97316);"><i data-lucide="flame"></i></div>
+                <div class="metric-data">
+                    <h4 id="stat-extracted">0</h4>
+                    <p>Extracted</p>
+                </div>
+            </div>
+        </div>
+        <div id="main-grid-container" style="display: grid; grid-template-columns: 1fr; gap: 24px; flex-grow: 1; align-items: start;">
+            <!-- SCHEDULER SETTINGS CARD -->
+            <div class="glass-card panel-card" id="scheduler-card" style="display: none;">
+                <div class="card-header">
+                    <div class="card-title-icon"><i data-lucide="clock"></i></div>
+                    <h3>Extraction Scheduler</h3>
+                </div>
+                <div class="card-body">
+                    <div class="toggle-container">
+                        <label class="switch">
+                            <input type="checkbox" id="scheduler-enabled">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-label">Enable Daily Extraction</span>
+                    </div>
+                    
+                    <div id="scheduler-config-container" style="display: none; margin-top: 12px;">
+                        <div class="form-group">
+                            <label for="scheduler-time">Scheduled Time (HH:MM)</label>
+                            <input type="time" id="scheduler-time" value="10:00" class="time-input">
+                        </div>
+                        
+                        <div class="form-group margin-top-12">
+                            <label>Active Days</label>
+                            <div class="weekday-selector margin-top-4">
+                                <button class="day-btn" data-day="0" title="Monday">M</button>
+                                <button class="day-btn" data-day="1" title="Tuesday">T</button>
+                                <button class="day-btn" data-day="2" title="Wednesday">W</button>
+                                <button class="day-btn" data-day="3" title="Thursday">T</button>
+                                <button class="day-btn" data-day="4" title="Friday">F</button>
+                                <button class="day-btn" data-day="5" title="Saturday">S</button>
+                                <button class="day-btn" data-day="6" title="Sunday">S</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <span class="input-hint margin-top-8">Automatically extracts exactly 15 new organic profiles per scheduled day. Ensure the server remains active.</span>
+                    <button id="btn-save-schedule" class="btn btn-secondary btn-sm margin-top-12 btn-full-width" disabled>
+                        <i data-lucide="save"></i> Save Schedule Settings
+                    </button>
+                </div>
+            </div>
+
+            <!-- MAIN TABLE PANEL -->
+            <div class="glass-card panel-card" style="height: 100%;">
+            <div class="filter-bar" style="border-radius: 0; border-top: none; border-left: none; border-right: none;">
+                <div class="search-wrapper">
+                    <i data-lucide="search"></i>
+                    <input type="text" id="search-input" placeholder="Search leads by name or title...">
+                </div>
+                <select id="status-filter" style="width: 200px;">
+                    <option value="all">All Statuses</option>
+                    <option value="Connected">Connected</option>
+                    <option value="Extracted">Extracted</option>
+                </select>
+                <button id="btn-toggle-scheduler" class="btn btn-secondary-outline" style="width: auto; margin-left: auto;">
+                    <i data-lucide="settings"></i> Toggle Scheduler
+                </button>
+                <button id="btn-refresh" class="btn btn-primary btn-glow" style="width: auto; margin-left: 8px;">
+                    <i data-lucide="refresh-cw"></i> Refresh
+                </button>
+                <button id="btn-temp-extract" class="btn btn-warning" style="width: auto; margin-left: 8px;">
+                    <i data-lucide="download"></i> Extract Connected Contacts (Temp)
+                </button>
+            </div>
+            
+            <div class="table-responsive" style="max-height: calc(100vh - 350px);">
+                <table id="leads-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">Sr.</th>
+                            <th style="width: 250px;">Prospect Info</th>
+                            <th>Status</th>
+                            <th>Logs / Activity</th>
+                            <th>Action Date</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leads-table-body">
+                        <tr>
+                            <td colspan="5" class="empty-state">
+                                <i data-lucide="loader" class="animate-spin" style="margin: 0 auto; display: block; margin-bottom: 12px; color: var(--accent-blue);"></i>
+                                <p>Loading Leads CRM Data...</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+        </div>
+        </div>
+        </div>
+    </div>
+    <script src="leads.js"></script>
+    <script>lucide.createIcons();</script>
+</body>
+</html>

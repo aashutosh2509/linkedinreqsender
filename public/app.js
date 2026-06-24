@@ -41,6 +41,7 @@ const adminStatTotal = document.getElementById("admin-stat-total");
 const adminStatSent = document.getElementById("admin-stat-sent");
 const adminStatPending = document.getElementById("admin-stat-pending");
 const adminStatConnected = document.getElementById("admin-stat-connected");
+const adminStatNotStarted = document.getElementById("admin-stat-not-started");
 const adminStatAvgDay = document.getElementById("admin-stat-avg-day");
 const adminStatAcceptRate = document.getElementById("admin-stat-accept-rate");
 const adminAcceptRateBar = document.getElementById("admin-accept-rate-bar");
@@ -53,6 +54,7 @@ const btnCheckLogin = document.getElementById("btn-check-login");
 const btnDeleteAccountWorkspace = document.getElementById("btn-delete-account-workspace");
 const excelDropZone = document.getElementById("excel-drop-zone");
 const excelFileInput = document.getElementById("excel-file-input");
+const dbTypeSelector = document.getElementById("db-type-selector");
 
 // 2FA Controls
 const card2FA = document.getElementById("two-factor-verification-card");
@@ -107,6 +109,8 @@ const rangeEndInput = document.getElementById("range-end");
 const btnStart = document.getElementById("btn-start");
 const btnStop = document.getElementById("btn-stop");
 const btnSync = document.getElementById("btn-sync");
+const btnStartAiResponder = document.getElementById("btn-start-ai-responder");
+const openaiApiKeyInput = document.getElementById("openai-api-key");
 const btnClearLogs = document.getElementById("btn-clear-logs");
 const consoleOutput = document.getElementById("console-output");
 
@@ -266,6 +270,7 @@ function setupEventListeners() {
     btnStart.addEventListener("click", startWorkspaceAutomation);
     btnStop.addEventListener("click", stopWorkspaceAutomation);
     btnSync.addEventListener("click", syncAcceptedRequests);
+    if (btnStartAiResponder) btnStartAiResponder.addEventListener("click", startAiResponder);
     btnClearLogs.addEventListener("click", clearLogsPanel);
     btnSaveSettings.addEventListener("click", saveWorkspaceSettings);
     
@@ -863,6 +868,7 @@ function renderSidebarAccounts() {
 // Process Admin dashboard view counts & registered tables
 function renderAdminDashboardView() {
     let totalProfiles = 0;
+    let totalNotStarted = 0;
     let totalSent = 0;
     let totalPending = 0;
     let totalConnected = 0;
@@ -873,15 +879,17 @@ function renderAdminDashboardView() {
     accountsRegistry.forEach(acc => {
         const s = acc.stats || {};
         totalProfiles += s.total || 0;
-        totalSent += s.sent || 0;
-        totalPending += s.pending || 0;
-        totalConnected += s.connected || 0;
+        totalNotStarted += s.not_started || 0;
+        totalSent += s.filtered_sent !== undefined ? s.filtered_sent : (s.sent || 0);
+        totalPending += s.filtered_pending !== undefined ? s.filtered_pending : (s.pending || 0);
+        totalConnected += s.filtered_connected !== undefined ? s.filtered_connected : (s.connected || 0);
         totalBotConnected += s.bot_connected || 0;
         totalActiveDays += s.active_days_count || 1;
     });
     
     // Draw central stats counts
     adminStatTotal.textContent = totalProfiles;
+    if (adminStatNotStarted) adminStatNotStarted.textContent = totalNotStarted;
     adminStatSent.textContent = totalSent;
     adminStatPending.textContent = totalPending;
     adminStatConnected.textContent = totalConnected;
@@ -976,10 +984,11 @@ function renderAdminDashboardView() {
                 <td style="vertical-align: middle;">${proxyBadge}</td>
                 <td style="vertical-align: middle;"><strong>${(acc.config && acc.config.daily_limit) || 25}</strong> / day</td>
                 <td style="text-align: center; vertical-align: middle;"><strong>${s.total || 0}</strong></td>
-                <td style="text-align: center; color: var(--accent-blue); font-weight:600; vertical-align: middle;">${s.sent || 0}</td>
-                <td style="text-align: center; color: var(--status-success); font-weight:600; vertical-align: middle;">${s.connected || 0}</td>
+                <td style="text-align: center; color: var(--accent-blue); font-weight:600; vertical-align: middle;">${s.filtered_sent !== undefined ? s.filtered_sent : (s.sent || 0)}</td>
+                <td style="text-align: center; color: var(--status-success); font-weight:600; vertical-align: middle;">${s.filtered_connected !== undefined ? s.filtered_connected : (s.connected || 0)}</td>
+                <td style="text-align: center; vertical-align: middle;">${s.messaged || 0}</td>
                 <td style="text-align: center; vertical-align: middle;">
-                    <strong>${s.acceptance_rate || 0}%</strong>
+                    <strong>${s.filtered_acceptance_rate !== undefined ? s.filtered_acceptance_rate : (s.acceptance_rate || 0)}%</strong>
                 </td>
                 <td style="font-size:0.75rem; color:var(--text-secondary); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align: middle;">
                     ${acc.current_action || 'Idle'}
@@ -1829,8 +1838,9 @@ async function fetchWorkspaceContacts() {
     }
 }
 
-function refreshWorkspaceStats(contactsList = currentFilteredContacts) {
-    const total = localContacts.length;
+function refreshWorkspaceStats() {
+    const contactsList = localContacts;
+    const total = contactsList.length;
     const pending = contactsList.filter(c => c.status === "Pending").length;
     const connected = contactsList.filter(c => c.status === "Connected").length;
 
@@ -1877,6 +1887,7 @@ function refreshWorkspaceStats(contactsList = currentFilteredContacts) {
     today.setHours(0,0,0,0);
     
     const sentTodayCount = localContacts.filter(c => {
+        if (!["Pending", "Connected", "Sent"].includes(c.status)) return false;
         const d = parseSentDate(c);
         if (!d) return false;
         d.setHours(0,0,0,0);
@@ -1888,6 +1899,7 @@ function refreshWorkspaceStats(contactsList = currentFilteredContacts) {
     sevenDaysAgo.setHours(0,0,0,0);
     
     const sentThisWeekCount = localContacts.filter(c => {
+        if (!["Pending", "Connected", "Sent"].includes(c.status)) return false;
         const d = parseSentDate(c);
         if (!d) return false;
         d.setHours(0,0,0,0);
@@ -2030,6 +2042,7 @@ function renderWorkspaceTable() {
         else if (c.status === "Sent") iconName = "send";
         else if (c.status === "Not Started") iconName = "play";
         else if (c.status === "Failed") iconName = "alert-triangle";
+        else if (c.status === "Extracted") iconName = "flame";
         
         let dateVal = "—";
         if (c.status === "Connected" && c.date_accepted) {
@@ -2064,8 +2077,8 @@ function renderWorkspaceTable() {
                     </div>
                 </td>
                 <td>
-                    <span class="contact-dob" title="${c.dob || 'Not Shared'}">
-                        <i data-lucide="calendar"></i> ${c.dob || '—'}
+                    <span class="contact-birthday" title="${c.dob || 'No birthday provided'}">
+                        <i data-lucide="gift"></i> ${c.dob || '—'}
                     </span>
                 </td>
                 <td>
@@ -2108,7 +2121,7 @@ async function executeReset(scope) {
         const response = await fetch(`${API_BASE}/contacts/reset`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ account_id: currentAccountId, scope: scope })
+            body: JSON.stringify({ account_id: currentAccountId, scope: scope, db_type: dbTypeSelector ? dbTypeSelector.value : "prospects" })
         });
         const res = await response.json();
         if (res.status === "success") {
@@ -2162,7 +2175,7 @@ async function adminClearDatabases() {
             await fetch(`${API_BASE}/contacts/clear`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ account_id: accountId })
+                body: JSON.stringify({ account_id: accountId, db_type: dbTypeSelector ? dbTypeSelector.value : "prospects" })
             });
         }
         alert("Databases successfully deleted.");
@@ -2205,7 +2218,7 @@ async function handleProspectTableClick(e) {
         const response = await fetch(`${API_BASE}/contacts/delete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ account_id: currentAccountId, profile_url: profileUrl })
+            body: JSON.stringify({ account_id: currentAccountId, profile_url: profileUrl, db_type: dbTypeSelector ? dbTypeSelector.value : "prospects" })
         });
         const res = await response.json();
         if (res.status === "success") {
@@ -2344,5 +2357,121 @@ async function saveAccountsOrderToServer(orderList) {
 async function downloadContacts() {
     if (currentAccountId === "admin") return;
     const status = statusFilterSelect ? statusFilterSelect.value : "all";
-    window.location.href = `${API_BASE}/export?account_id=${currentAccountId}&status=${status}`;
+    const dbType = dbTypeSelector ? dbTypeSelector.value : "prospects";
+    window.location.href = `${API_BASE}/export?account_id=${currentAccountId}&status=${status}&db_type=${dbType}`;
 }
+
+async function tempExtractConnections() {
+    if (!currentAccountId || currentAccountId === "admin") return;
+    
+    if (isSystemRunning) {
+        alert("System is currently running. Please stop automation first.");
+        return;
+    }
+    
+    if (btnTempExtract) btnTempExtract.disabled = true;
+    appendLogToConsole("Requesting temporary connections extraction", "info");
+    try {
+        const res = await fetch(`${API_BASE}/extract-connections-temp`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ account_id: currentAccountId })
+        });
+        const data = await res.json();
+        
+        if (data.status === "success") {
+            appendLogToConsole(data.message, "success");
+        } else {
+            appendLogToConsole(`Error starting extraction: ${data.message || data.error}`, "error");
+            if (btnTempExtract) btnTempExtract.disabled = false;
+        }
+    } catch (e) {
+        appendLogToConsole(`Extraction failed: ${e}`, "error");
+        if (btnTempExtract) btnTempExtract.disabled = false;
+    }
+    
+    setTimeout(() => {
+        if (btnTempExtract) btnTempExtract.disabled = false;
+    }, 10000);
+}
+
+async function startAiResponder() {
+    if (!currentAccountId) return;
+    const apiKey = openaiApiKeyInput.value.trim();
+    if (!apiKey) {
+        appendLogToConsole("Error: You must enter a Gemini API Key first.", "error");
+        return;
+    }
+    
+    try {
+        appendLogToConsole("Starting AI Auto-Responder...", "info");
+        const res = await fetch("/api/start-auto-responder", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ account_id: currentAccountId, api_key: apiKey })
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+            appendLogToConsole("AI Auto-Responder task added to queue.", "success");
+            startPolling(2000);
+        } else {
+            appendLogToConsole(`Failed to start responder: ${data.message || data.error}`, "error");
+        }
+    } catch (e) {
+        appendLogToConsole(`Error starting responder: ${e.message}`, "error");
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+    const btnToggleNav = document.getElementById('btn-toggle-nav');
+    let isSidebarHidden = false;
+    let isNavHidden = localStorage.getItem('isNavHidden') === 'true';
+    
+    const appContainer = document.querySelector('.app-container');
+    if (appContainer && isNavHidden && btnToggleNav) {
+        appContainer.classList.add('navigation-hidden');
+        btnToggleNav.innerHTML = '<i data-lucide="menu"></i> <span id="toggle-nav-text">Show Menu</span>';
+    }
+
+    if (btnToggleSidebar) {
+        btnToggleSidebar.addEventListener('click', () => {
+            const workspaceGrid = document.querySelector('.dashboard-grid');
+            if (!workspaceGrid) return;
+            isSidebarHidden = !isSidebarHidden;
+            if (isSidebarHidden) {
+                workspaceGrid.classList.add('sidebar-hidden');
+                btnToggleSidebar.innerHTML = '<i data-lucide="sliders"></i> <span id="toggle-sidebar-text">Show Form</span>';
+            } else {
+                workspaceGrid.classList.remove('sidebar-hidden');
+                btnToggleSidebar.innerHTML = '<i data-lucide="sliders"></i> <span id="toggle-sidebar-text">Hide Form</span>';
+            }
+            if (window.lucide) window.lucide.createIcons();
+        });
+    }
+
+    if (btnToggleNav) {
+        btnToggleNav.addEventListener('click', () => {
+            isNavHidden = !isNavHidden;
+            localStorage.setItem('isNavHidden', isNavHidden);
+            if (isNavHidden) {
+                appContainer.classList.add('navigation-hidden');
+                btnToggleNav.innerHTML = '<i data-lucide="menu"></i> <span id="toggle-nav-text">Show Menu</span>';
+            } else {
+                appContainer.classList.remove('navigation-hidden');
+                btnToggleNav.innerHTML = '<i data-lucide="menu"></i> <span id="toggle-nav-text">Hide Menu</span>';
+            }
+            if (window.lucide) window.lucide.createIcons();
+        });
+    }
+    
+    const viewAdmin = document.getElementById('view-admin');
+    const observer = new MutationObserver(() => {
+        if (viewAdmin.style.display === 'none') {
+            if (btnToggleSidebar) btnToggleSidebar.style.display = 'inline-flex';
+        } else {
+            if (btnToggleSidebar) btnToggleSidebar.style.display = 'none';
+        }
+    });
+    observer.observe(viewAdmin, { attributes: true, attributeFilter: ['style'] });
+});

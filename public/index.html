@@ -41,6 +41,13 @@
                         <span class="acc-status">Overall Analytics</span>
                     </div>
                 </button>
+                <button class="account-item" id="btn-open-leads-crm" onclick="window.open('leads.html', '_blank')" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(249, 115, 22, 0.05)); border: 1px solid rgba(239,68,68,0.2); margin-top: 8px;">
+                    <div class="item-icon" style="background: linear-gradient(135deg, #ef4444, #f97316); box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);"><i data-lucide="flame"></i></div>
+                    <div class="item-info">
+                        <span class="acc-name" style="color: #ef4444; font-weight: 700;">Leads CRM</span>
+                        <span class="acc-status">Hot Pipeline</span>
+                    </div>
+                </button>
             </div>
 
             <div class="sidebar-section-title">LINKEDIN ACCOUNTS</div>
@@ -104,6 +111,14 @@
                     </div>
 
                     <div class="glass-card metric-card">
+                        <div class="metric-icon bg-gray" style="background: rgba(100, 116, 139, 0.2); color: var(--text-muted);"><i data-lucide="play"></i></div>
+                        <div class="metric-data">
+                            <h4 id="admin-stat-not-started">0</h4>
+                            <p>Not Started</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-card metric-card">
                         <div class="metric-icon bg-blue"><i data-lucide="send"></i></div>
                         <div class="metric-data">
                             <h4 id="admin-stat-sent">0</h4>
@@ -127,7 +142,7 @@
                         </div>
                     </div>
 
-                    <div class="glass-card metric-card">
+                    <div class="glass-card metric-card metric-card--accent">
                         <div class="metric-icon bg-teal"><i data-lucide="trending-up"></i></div>
                         <div class="metric-data">
                             <h4 id="admin-stat-avg-day">0<span class="metric-unit">/day</span></h4>
@@ -135,7 +150,7 @@
                         </div>
                     </div>
 
-                    <div class="glass-card metric-card">
+                    <div class="glass-card metric-card metric-card--accent">
                         <div class="metric-icon bg-pink"><i data-lucide="percent"></i></div>
                         <div class="metric-data">
                             <h4 id="admin-stat-accept-rate">0<span class="metric-unit">%</span></h4>
@@ -145,6 +160,7 @@
                             </div>
                         </div>
                     </div>
+
                 </div>
 
                 <!-- ADMIN ACCOUNTS GRID -->
@@ -158,7 +174,7 @@
                             </span>
                         </div>
                         <div class="table-header-right">
-                            <div class="filter-dropdown-container" style="margin-right: 8px; display: none;">
+                            <div class="filter-dropdown-container">
                                 <select id="admin-status-filter" class="filter-select">
                                     <option value="all">All Statuses</option>
                                     <option value="Not Started">Not Started</option>
@@ -167,7 +183,7 @@
                                     <option value="Failed">Failed</option>
                                 </select>
                             </div>
-                            <div class="filter-dropdown-container" style="margin-right: 8px;">
+                            <div class="filter-dropdown-container">
                                 <select id="admin-date-filter" class="filter-select">
                                     <option value="all">All Time</option>
                                     <option value="today">Today</option>
@@ -214,6 +230,7 @@
                                     <th style="text-align: center;">Total Database</th>
                                     <th style="text-align: center;">Sent</th>
                                     <th style="text-align: center;">Connected</th>
+                                    <th style="text-align: center;">Messaged</th>
                                     <th style="text-align: center;">Acceptance Rate</th>
                                     <th>Current Action</th>
                                     <th style="text-align: center;">Status</th>
@@ -230,7 +247,7 @@
 
             <!-- 2. SPECIFIC ACCOUNT WORKSPACE VIEW -->
             <div id="view-workspace" class="view-panel" style="display: none;">
-                <main class="dashboard-grid" id="workspace-dashboard-grid">
+                <main class="dashboard-grid">
                     
                     <!-- LEFT PANEL: WORKSPACE CONTROLS -->
                     <section class="control-sidebar">
@@ -277,7 +294,7 @@
                         </div>
 
                         <!-- EXCEL UPLOAD CARD -->
-                        <div class="glass-card panel-card" id="excel-upload-card">
+                        <div class="glass-card panel-card" id="excel-upload-card" >
                             <div class="card-header">
                                 <div class="card-title-icon"><i data-lucide="file-spreadsheet"></i></div>
                                 <h3>Load Excel Sheet</h3>
@@ -298,7 +315,7 @@
                         </div>
 
                         <!-- QUICK ADD CARD -->
-                        <div class="glass-card panel-card" id="quick-add-card">
+                        <div class="glass-card panel-card" id="quick-add-card" >
                             <div class="card-header">
                                 <div class="card-title-icon"><i data-lucide="link"></i></div>
                                 <h3>Add Single Profile URL</h3>
@@ -374,7 +391,7 @@
                         </div>
 
                         <!-- SCHEDULER SETTINGS CARD -->
-                        <div class="glass-card panel-card" id="scheduler-card">
+                        <div class="glass-card panel-card" id="scheduler-card" >
                             <div class="card-header">
                                 <div class="card-title-icon"><i data-lucide="clock"></i></div>
                                 <h3>Automation Scheduler</h3>
@@ -427,7 +444,7 @@
                         </div>
 
                         <!-- MESSAGE BUILDER -->
-                        <div class="glass-card panel-card" id="template-card">
+                        <div class="glass-card panel-card" id="template-card" >
                             <div class="card-header">
                                 <div class="card-title-icon"><i data-lucide="message-square"></i></div>
                                 <h3>Connection Message</h3>
@@ -462,7 +479,7 @@
                                 <h3>Action Controls</h3>
                             </div>
                             <div class="card-body">
-                                <div class="selective-send-container margin-bottom-12">
+                                <div class="selective-send-container margin-bottom-12" >
                                     <div class="selective-send-header">
                                         <i data-lucide="list-ordered"></i>
                                         <span>Selective Range (Optional)</span>
@@ -480,7 +497,7 @@
                                 </div>
 
                                 <div class="action-btn-row">
-                                    <button id="btn-start" class="btn btn-success btn-grow" disabled>
+                                    <button id="btn-start"  class="btn btn-success btn-grow" disabled>
                                         <i data-lucide="play"></i> Start Queue
                                     </button>
                                     <button id="btn-stop" class="btn btn-danger btn-grow" disabled>
@@ -489,6 +506,29 @@
                                 </div>
                                 <button id="btn-sync" class="btn btn-secondary margin-top-12">
                                     <i data-lucide="refresh-cw"></i> Sync Accepted Requests
+                                </button>
+
+                                <button id="btn-start-messaging"  class="btn btn-primary margin-top-12 btn-full-width">
+                                    <i data-lucide="message-circle"></i> Start Messaging Campaign
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- AI AUTO-RESPONDER -->
+                        <div class="glass-card panel-card" id="ai-responder-card">
+                            <div class="card-header">
+                                <div class="card-title-icon" style="color: var(--status-success);"><i data-lucide="bot"></i></div>
+                                <h3>AI Auto-Responder</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-group">
+                                    <label for="openai-api-key">Gemini API Key <span class="required">*</span></label>
+                                    <input type="password" id="openai-api-key" placeholder="AIzaSy..." autocomplete="off" value="">
+                                </div>
+                                <span class="input-hint margin-bottom-12">Leave this running to have AI automatically reply to new incoming messages. <br>Get a free Gemini API Key from <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color: var(--primary-light);">Google AI Studio</a>.</span>
+                                
+                                <button id="btn-start-ai-responder" class="btn btn-success margin-top-12 btn-full-width">
+                                    <i data-lucide="play"></i> Start AI Responder
                                 </button>
                             </div>
                         </div>
@@ -519,6 +559,14 @@
                             </div>
 
                             <div class="glass-card metric-card">
+                                <div class="metric-icon bg-gray" style="background: rgba(100, 116, 139, 0.2); color: var(--text-muted);"><i data-lucide="play"></i></div>
+                                <div class="metric-data">
+                                    <h4 id="stat-not-started">0</h4>
+                                    <p>Not Started</p>
+                                </div>
+                            </div>
+
+                            <div class="glass-card metric-card">
                                 <div class="metric-icon bg-blue"><i data-lucide="send"></i></div>
                                 <div class="metric-data">
                                     <h4 id="stat-sent">0</h4>
@@ -542,7 +590,7 @@
                                 </div>
                             </div>
 
-                            <div class="glass-card metric-card">
+                            <div class="glass-card metric-card metric-card--accent">
                                 <div class="metric-icon bg-teal"><i data-lucide="trending-up"></i></div>
                                 <div class="metric-data">
                                     <h4 id="stat-avg-day">0<span class="metric-unit">/day</span></h4>
@@ -550,7 +598,7 @@
                                 </div>
                             </div>
 
-                            <div class="glass-card metric-card">
+                            <div class="glass-card metric-card metric-card--accent">
                                 <div class="metric-icon bg-pink"><i data-lucide="percent"></i></div>
                                 <div class="metric-data">
                                     <h4 id="stat-accept-rate">0<span class="metric-unit">%</span></h4>
@@ -561,15 +609,6 @@
                                 </div>
                             </div>
 
-
-
-                            <div class="glass-card metric-card">
-                                <div class="metric-icon bg-gray" style="background: var(--surface-hover); color: var(--text-muted);"><i data-lucide="circle-dashed"></i></div>
-                                <div class="metric-data">
-                                    <h4 id="stat-not-started">0</h4>
-                                    <p>Not Started</p>
-                                </div>
-                            </div>
                         </div>
 
                         <!-- DUAL PROGRESS BAR QUOTAS -->
@@ -606,8 +645,11 @@
                         <!-- DB TABLE -->
                         <div class="glass-card table-card">
                             <div class="table-header-bar">
-                                <div class="table-header-left">
-                                    <h3>Prospect Database</h3>
+                                <div class="table-header-left" style="display: flex; align-items: center; gap: 12px;">
+                                    <select id="db-type-selector" style="display: none;">
+                                        <option value="prospects" selected>Prospect Database</option>
+                                    </select>
+                                    <h3 style="font-size: 1.1rem; font-weight: 600; margin: 0; padding: 6px 12px; background: rgba(0, 142, 218, 0.1); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 6px; font-family: 'Outfit', sans-serif;">Prospect Database</h3>
                                     <span class="count-tag" id="contacts-count">0 contacts</span>
                                 </div>
                                 <div class="table-header-right">
@@ -673,7 +715,7 @@
                                             <th>Company</th>
                                             <th>Profile URL</th>
                                             <th>Email / Phone</th>
-                                            <th>DOB</th>
+                                            <th>Birthday</th>
                                             <th>Status</th>
                                             <th>Date Sent / Sync</th>
                                             <th style="width: 80px; text-align: center;">Action</th>
@@ -801,8 +843,7 @@
             </div>
         </div>
     </div>
-
     <!-- Frontend logic -->
-    <script src="app.js?v=3"></script>
+    <script src="app.js"></script>
 </body>
 </html>

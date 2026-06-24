@@ -41,14 +41,7 @@ class AutomationState:
             self.logs.append(log_entry)
             if len(self.logs) > 200:
                 self.logs.pop(0)
-        try:
-            print(f"[{timestamp}] [{type.upper()}] {text}")
-        except Exception:
-            try:
-                safe_text = text.encode('ascii', errors='replace').decode('ascii')
-                print(f"[{timestamp}] [{type.upper()}] {safe_text}")
-            except Exception:
-                pass
+        print(f"[{timestamp}] [{type.upper()}] {text}")
 
     def update_status(self, action=None, progress=None):
         with self._lock:
@@ -437,7 +430,6 @@ def open_linkedin_for_login(account_id="default"):
     threading.Thread(target=run, daemon=True).start()
 
 
-
 def scrape_contact_info(page, username, account_id="default"):
     """
     Extracts email and phone from a connected LinkedIn profile's Contact Info overlay.
@@ -458,13 +450,6 @@ def scrape_contact_info(page, username, account_id="default"):
             time.sleep(random.uniform(3, 4.5))
         else:
             acc_state.add_log("Already on target profile page. Directly opening contact info...", "info")
-            
-        # Dismiss any open dropdowns/menus that might overlap the Contact info link
-        try:
-            page.keyboard.press("Escape")
-            time.sleep(1.0)
-        except:
-            pass
             
         # Click Contact info link to trigger the overlay/section
         clicked = False
@@ -1152,37 +1137,21 @@ def run_automation_worker_sync(account_id="default", config=None):
                     continue
 
                 clicked_connect = False
-                
-                # Determine the unique main profile header card scope to completely avoid recommended sidebar buttons
-                top_card_scope = None
-                try:
-                    h1_loc = page.locator("main h1").first
-                    if h1_loc.is_visible(timeout=3000):
-                        top_card_scope = h1_loc.locator("xpath=ancestor::*[self::section or contains(@class, 'card') or contains(@class, 'top-card') or contains(@class, 'pv-top-card')][1]")
-                        acc_state.add_log("Successfully scoped search to unique main profile header card.", "info")
-                except:
-                    pass
-                
-                if not top_card_scope:
-                    top_card_scope = page.locator("main section:first-of-type, main [class*='top-card']").first
-                    
-                acc_state.add_log("Primary strategy: Searching for direct 'Connect' button inside profile card scope...", "info")
+                state.add_log("Primary strategy: Searching for direct 'Connect' button on the profile header...", "info")
                 connect_button = None
                 direct_connect_selectors = [
-                    "button:has-text('Connect'):not(.artdeco-dropdown__item):not([role='menuitem'])",
-                    "*[text()='Connect']:not(.artdeco-dropdown__item):not([role='menuitem'])",
-                    "xpath=.//button[contains(., 'Connect') and not(ancestor::*[contains(@class, 'dropdown') or contains(@role, 'menu')])]",
-                    "xpath=.//*[text()='Connect' and not(ancestor::*[contains(@class, 'dropdown') or contains(@role, 'menu')])]"
+                    f"{HEADER_ANCHOR}//button[contains(., 'Connect')]",
+                    f"{HEADER_ANCHOR}//*[text()='Connect']",
+                    "main [class*='top-card'] button:has-text('Connect')"
                 ]
-                
                 try:
-                    top_card_scope.locator("button:has-text('Connect'):not(.artdeco-dropdown__item):not([role='menuitem'])").first.wait_for(state="visible", timeout=2000)
+                    page.locator(", ".join([s for s in direct_connect_selectors if not s.startswith("xpath=")])).first.wait_for(state="visible", timeout=2000)
                 except:
                     pass
 
                 for selector in direct_connect_selectors:
                     try:
-                        btn = top_card_scope.locator(selector).first
+                        btn = page.locator(selector).first
                         if btn.is_visible() and btn.is_enabled():
                             connect_button = btn
                             break
@@ -1191,40 +1160,42 @@ def run_automation_worker_sync(account_id="default", config=None):
                         
                 if connect_button:
                     acc_state.add_log("Found direct 'Connect' button on header. Clicking...", "info")
-                    try:
-                        connect_button.click(force=True)
-                    except Exception as err:
-                        acc_state.add_log(f"Playwright click failed: {err}. Trying fallback JS evaluate...", "warning")
-                        connect_button.evaluate("el => el.click()")
+                    connect_button.click(force=True)
                     clicked_connect = True
                 else:
                     acc_state.add_log("Direct 'Connect' button not visible or disabled on header.", "info")
                     
                 if not clicked_connect:
-                    acc_state.add_log("Fallback: Looking for 'More' or '...' dropdown button inside profile header scope...", "info")
+                    acc_state.add_log("Fallback: Looking for 'More' or '...' dropdown button...", "info")
                     more_button = None
 
-                    # Scoped More/Actions selectors inside top_card_scope to prevent matching suggested sidebar profiles
+                    # --- STRATEGY 1: Try standard CSS/aria-label selectors ---
                     more_selectors = [
-                        "button[aria-label='More actions']",
-                        "button[aria-label='See more actions']",
-                        "button[aria-label*='More']",
-                        "button[aria-label*='more']",
-                        "button:has-text('More')",
-                        "button[aria-expanded]",
-                        ".artdeco-button--muted.artdeco-button--icon",
-                        "xpath=.//button[normalize-space(.)='More']",
-                        "xpath=.//button[contains(., 'More')]",
-                        "xpath=.//button[contains(@aria-label, 'More actions')]"
+                        # Strict XPath selectors inside the profile's top card
+                        f"{HEADER_ANCHOR}//button[@aria-label='More actions']",
+                        f"{HEADER_ANCHOR}//button[@aria-label='See more actions']",
+                        f"{HEADER_ANCHOR}//button[contains(@aria-label, 'More')]",
+                        f"{HEADER_ANCHOR}//button[contains(@aria-label, 'more')]",
+                        f"{HEADER_ANCHOR}//button[contains(., 'More')]",
+                        f"{HEADER_ANCHOR}//button[contains(., 'more')]",
+                        
+                        # Strict CSS selectors inside the profile top card
+                        "main [class*='top-card'] button[aria-label='More actions']",
+                        "main [class*='top-card'] button[aria-label='See more actions']",
+                        "main [class*='top-card'] button[aria-label*='More']",
+                        "main [class*='top-card'] button[aria-label*='more']",
+                        ".pvs-profile-actions button:has-text('More')",
+                        "main [class*='top-card'] button:has-text('More')",
+                        "main [class*='top-card'] .artdeco-button--muted.artdeco-button--icon",
                     ]
-                    
+                    css_more = [s for s in more_selectors if not s.startswith("xpath=")]
                     try:
-                        top_card_scope.locator("button[aria-label*='More'], button[aria-label*='more'], button:has-text('More')").first.wait_for(state="visible", timeout=3000)
+                        page.locator(", ".join(css_more)).first.wait_for(state="visible", timeout=3000)
                     except:
                         pass
                     for selector in more_selectors:
                         try:
-                            btn = top_card_scope.locator(selector).first
+                            btn = page.locator(selector).first
                             if btn.is_visible() and btn.is_enabled():
                                 more_button = btn
                                 acc_state.add_log(f"Found More/... button via: {selector}", "info")

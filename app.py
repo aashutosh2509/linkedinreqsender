@@ -5,7 +5,6 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import openpyxl
-import time
 
 import automation
 from automation import (
@@ -17,10 +16,10 @@ from automation import (
     save_db,
     open_linkedin_for_login,
     run_automation_worker,
-    run_automation_worker_sync,
     sync_acceptance_task,
     queue_runner,
-    BROWSERS_PATH
+    BROWSERS_PATH,
+    start_messaging_worker
 )
 from cloud_sync import start_sync_worker
 
@@ -123,6 +122,7 @@ def validate_and_normalize_linkedin_url(url):
         clean_url,
         flags=re.IGNORECASE
     )
+    
     return clean_url, None
 
 # Serves frontend files
@@ -154,8 +154,8 @@ def get_accounts():
         acc["progress_percent"] = state_dict["progress_percent"]
         acc["logs"] = state_dict["logs"]
         
-        # Pull stats from individual db
-        contacts = load_db(acc_id)
+        # Pull stats from individual db (only prospects for total dashboard stats as requested)
+        contacts = load_db(acc_id, "prospects")
         
         filtered_contacts = contacts
         if start_date or end_date:
@@ -174,39 +174,50 @@ def get_accounts():
                 except:
                     pass
         
-        date_filtered_contacts = list(filtered_contacts)
-        
         if status and status != "all":
             filtered_contacts = [c for c in filtered_contacts if c.get("status") == status]
             
-        all_connected = sum(1 for c in filtered_contacts if c.get("status") == "Connected")
+        # Stats based on the FILTERED selection
+        filtered_connected = sum(1 for c in filtered_contacts if c.get("status") == "Connected")
+        filtered_pending = sum(1 for c in filtered_contacts if c.get("status") == "Pending")
+        filtered_sent = sum(1 for c in filtered_contacts if c.get("status") in ["Pending", "Connected", "Sent"])
         
-        bot_connected = sum(1 for c in filtered_contacts if c.get("status") == "Connected" and c.get("date_sent"))
-        pending_count = sum(1 for c in filtered_contacts if c.get("status") == "Pending")
+        # Dashboard Top-Line Stats (Always based on FULL contacts list, ignoring filters, just like the standard dashboard)
+        connected_count = sum(1 for c in contacts if c.get("status") == "Connected")
+        pending_count = sum(1 for c in contacts if c.get("status") == "Pending")
+        failed_count = sum(1 for c in contacts if c.get("status") == "Failed")
+        not_started_count = sum(1 for c in contacts if c.get("status") == "Not Started")
+        sent_total = sum(1 for c in contacts if c.get("status") in ["Pending", "Connected", "Sent"])
+        messaged_count = sum(1 for c in contacts if c.get("message_sent"))
         
-        failed_count = sum(1 for c in filtered_contacts if c.get("status") == "Failed" and c.get("date_sent"))
-        sent_total = sum(1 for c in filtered_contacts if c.get("status") in ["Pending", "Connected"])
-        
-        # Calculate active days from date_sent
-        days_active = set()
-        for c in filtered_contacts:
-            ds = c.get("date_sent")
-            if ds:
+        # Calculate active days from FULL list
+        active_days = set()
+        for c in contacts:
+            d = c.get("date_sent")
+            if d:
                 try:
-                    days_active.add(ds.split()[0])
+                    active_days.add(d.split(" ")[0])
                 except:
                     pass
-                    
+                
         acc["stats"] = {
             "total": len(contacts),
+            "not_started": not_started_count,
             "sent": sent_total,
-            "connected": all_connected,
-            "bot_connected": bot_connected,
+            "connected": connected_count,
             "pending": pending_count,
             "failed": failed_count,
-            "active_days_count": len(days_active) or 1,
-            "avg_sent_per_day": round(sent_total / (len(days_active) or 1), 1),
-            "acceptance_rate": round((all_connected / (all_connected + pending_count) * 100), 1) if (all_connected + pending_count) > 0 else 0.0
+            "messaged": messaged_count,
+            "active_days_count": len(active_days) or 1,
+            "avg_sent_per_day": round(sent_total / (len(active_days) or 1), 1),
+            "acceptance_rate": round((connected_count / (connected_count + pending_count) * 100), 1) if (connected_count + pending_count) > 0 else 0.0,
+            
+            # Additional filtered stats used for the admin table rendering rows
+            "filtered_total": len(filtered_contacts),
+            "filtered_sent": filtered_sent,
+            "filtered_connected": filtered_connected,
+            "filtered_pending": filtered_pending,
+            "filtered_acceptance_rate": round((filtered_connected / (filtered_connected + filtered_pending) * 100), 1) if (filtered_connected + filtered_pending) > 0 else 0.0
         }
     return jsonify(accounts)
 
@@ -251,7 +262,8 @@ def add_account():
     save_accounts_registry(accounts)
     
     # Initialize empty db
-    save_db([], acc_id)
+    save_db([], acc_id, "prospects")
+    save_db([], acc_id, "leads")
     
     acc_state = get_account_state(acc_id)
     acc_state.add_log(f"Account '{acc_name}' ({acc_id}) registered successfully.", "success")
@@ -279,13 +291,14 @@ def delete_account():
     accounts = [a for a in accounts if a.get("id") != acc_id]
     save_accounts_registry(accounts)
     
-    # Remove db file
-    db_path = automation.get_db_path(acc_id)
-    if os.path.exists(db_path):
-        try:
-            os.remove(db_path)
-        except Exception:
-            pass
+    # Remove db files
+    for db_type in ["prospects", "leads"]:
+        db_path = automation.get_db_path(acc_id, db_type)
+        if os.path.exists(db_path):
+            try:
+                os.remove(db_path)
+            except Exception:
+                pass
             
     return jsonify({"status": "success", "message": f"Account '{acc_to_remove.get('name')}' removed successfully."})
 
@@ -358,6 +371,18 @@ def update_account_config():
             }
         else:
             acc_config["schedule"] = None
+            
+    if "extract_schedule" in config:
+        esched = config["extract_schedule"]
+        if esched:
+            acc_config["extract_schedule"] = {
+                "enabled": bool(esched.get("enabled", False)),
+                "time": str(esched.get("time", "10:00")).strip(),
+                "days": [int(d) for d in esched.get("days", [])],
+                "last_run": esched.get("last_run")
+            }
+        else:
+            acc_config["extract_schedule"] = None
         
     if "proxy" in req_data:
         px = req_data["proxy"]
@@ -415,7 +440,8 @@ def check_account_login():
 @app.route("/api/contacts", methods=["GET"])
 def get_contacts():
     acc_id = request.args.get("account_id", "default")
-    return jsonify(load_db(acc_id))
+    db_type = request.args.get("db_type", "prospects")
+    return jsonify(load_db(acc_id, db_type))
 
 # API - Add a single contact
 @app.route("/api/contacts/add", methods=["POST"])
@@ -435,7 +461,8 @@ def add_contact():
         return err_response(url_error)
     url = norm_url
     
-    db_data = load_db(acc_id)
+    db_type = req_data.get("db_type", "prospects")
+    db_data = load_db(acc_id, db_type)
     existing_urls = {c.get("profile_url", "").strip().split('?')[0].rstrip('/') for c in db_data}
     if norm_url in existing_urls:
         return err_response("This profile URL already exists in this account's database.")
@@ -462,12 +489,11 @@ def add_contact():
         "date_accepted": None,
         "email": None,
         "phone": None,
-        "dob": None,
         "logs": None
     }
     
     db_data.append(new_contact)
-    save_db(db_data, acc_id)
+    save_db(db_data, acc_id, db_type)
     
     acc_state.add_log(f"Added single profile: {name} ({url})", "success")
     return jsonify({"status": "success", "message": f"Successfully added {name} to list."})
@@ -482,7 +508,8 @@ def clear_contacts():
     if acc_state.is_running:
         return err_response("Cannot clear contacts while automation is running.")
         
-    save_db([], acc_id)
+    db_type = req_data.get("db_type", "prospects")
+    save_db([], acc_id, db_type)
     acc_state.add_log("Database cleared by user.", "warning")
     return jsonify({"status": "success", "message": "Contacts list cleared."})
 
@@ -500,7 +527,8 @@ def delete_contact():
     if not url:
         return err_response("Profile URL is required to delete a contact.")
         
-    db_data = load_db(acc_id)
+    db_type = req_data.get("db_type", "prospects")
+    db_data = load_db(acc_id, db_type)
     index_to_remove = -1
     for i, contact in enumerate(db_data):
         if contact.get("profile_url", "").strip() == url:
@@ -511,7 +539,7 @@ def delete_contact():
         return err_response("Contact not found.")
         
     removed = db_data.pop(index_to_remove)
-    save_db(db_data, acc_id)
+    save_db(db_data, acc_id, db_type)
     
     acc_state.add_log(f"Deleted contact: {removed.get('name')} ({url})", "warning")
     return jsonify({"status": "success", "message": f"Successfully deleted {removed.get('name')}."})
@@ -527,7 +555,8 @@ def reset_contacts():
     if acc_state.is_running:
         return err_response("Cannot reset contacts while automation is running.")
         
-    db_data = load_db(acc_id)
+    db_type = req_data.get("db_type", "prospects")
+    db_data = load_db(acc_id, db_type)
     reset_count = 0
     for contact in db_data:
         status = contact.get("status", "Not Started")
@@ -537,7 +566,6 @@ def reset_contacts():
             contact["date_accepted"] = None
             contact["email"] = None
             contact["phone"] = None
-            contact["dob"] = None
             contact["logs"] = None
             reset_count += 1
         elif scope == "failed" and status == "Failed":
@@ -549,7 +577,7 @@ def reset_contacts():
             contact["date_sent"] = None
             reset_count += 1
             
-    save_db(db_data, acc_id)
+    save_db(db_data, acc_id, db_type)
     acc_state.add_log(f"Reset {reset_count} contact(s) back to 'Not Started' ({scope} scope).", "info")
     return jsonify({"status": "success", "message": f"Successfully reset {reset_count} contacts.", "reset_count": reset_count})
 
@@ -562,15 +590,16 @@ def export_contacts():
     
     acc_id = request.args.get("account_id", "default")
     status = request.args.get("status", "all")
+    db_type = request.args.get("db_type", "prospects")
     
-    db_data = load_db(acc_id)
+    db_data = load_db(acc_id, db_type)
     
     if status and status != "all":
         db_data = [c for c in db_data if c.get("status") == status]
         
     si = io.StringIO()
     cw = csv.writer(si)
-    cw.writerow(["Name", "First Name", "Last Name", "Profile URL", "Company", "Title", "Status", "Date Sent", "Date Accepted", "Email", "Phone", "DOB", "Logs"])
+    cw.writerow(["Name", "First Name", "Last Name", "Profile URL", "Company", "Title", "Status", "Date Sent", "Date Accepted", "Email", "Phone", "Logs"])
     
     for c in db_data:
         cw.writerow([
@@ -585,7 +614,6 @@ def export_contacts():
             c.get("date_accepted", "") or "",
             c.get("email", "") or "",
             c.get("phone", "") or "",
-            c.get("dob", "") or "",
             c.get("logs", "") or ""
         ])
         
@@ -736,6 +764,7 @@ def diagnose_pw():
 def start_automation():
     config = request.json or {}
     acc_id = config.get("account_id", "default")
+    db_type = config.get("db_type", "prospects")
     acc_state = get_account_state(acc_id)
     
     if acc_state.is_running:
@@ -766,65 +795,28 @@ def start_automation():
         weekly_limit=weekly_limit,
         start_index=start_index,
         end_index=end_index,
-        account_id=acc_id
+        account_id=acc_id,
+        db_type=db_type
     )
-    return jsonify({"status": "success", "message": "Automation started"})
+    return jsonify({"status": "success", "message": "Account added to automation queue."})
 
-def run_bulk_automation_in_thread(configs):
-    for config in configs:
-        acc_id = config.get("account_id", "default")
-        acc_state = get_account_state(acc_id)
-        
-        if acc_state.is_running:
-            continue
-            
-        note_template = config.get("note_template", "Hi {FirstName}, let's connect!")
-        send_with_note = config.get("send_with_note", False)
-        delay_min = int(config.get("delay_min", 30))
-        delay_max = int(config.get("delay_max", 70))
-        daily_limit = int(config.get("daily_limit", 25))
-        weekly_limit = int(config.get("weekly_limit", 150))
-        start_index = config.get("start_index")
-        end_index = config.get("end_index")
-        
-        if delay_min < 10:
-            delay_min = 10
-        if delay_max < delay_min:
-            delay_max = delay_min + 5
-            
-        try:
-            run_automation_worker_sync(
-                account_id=acc_id,
-                config={
-                    "note_template": note_template,
-                    "send_with_note": send_with_note,
-                    "delay_min": delay_min,
-                    "delay_max": delay_max,
-                    "daily_limit": daily_limit,
-                    "weekly_limit": weekly_limit,
-                    "start_index": start_index,
-                    "end_index": end_index
-                }
-            )
-        except Exception as e:
-            acc_state.add_log(f"Bulk sequential run failed for this account: {str(e)}", "error")
-            
-        # Wait a bit between accounts to ensure clean browser shutdown
-        time.sleep(5)
+# API - Stop/Pause automation
 
-@app.route("/api/start_bulk", methods=["POST"])
-def start_bulk_automation():
-    configs = request.json or []
-    if not isinstance(configs, list) or len(configs) == 0:
-        return err_response("Invalid configuration list provided.")
-        
-    thread = threading.Thread(target=run_bulk_automation_in_thread, args=(configs,))
-    thread.daemon = True
-    thread.start()
-    
-    return jsonify({"status": "success", "message": "Sequential bulk automation started"})
+@app.route("/api/start-messaging", methods=["POST"])
+def start_messaging():
+    data = request.json or {}
+    account_id = data.get("account_id", "default")
+    config = {
+        "template": data.get("template", ""),
+        "delay_min": int(data.get("delay_min", 30)),
+        "delay_max": int(data.get("delay_max", 70))
+    }
+    db_type = data.get("db_type", "prospects")
+    res = start_messaging_worker(account_id=account_id, config=config, db_type=db_type)
+    if res.get("status") == "error":
+        return jsonify({"status": "error", "error": res.get("error")}), 400
+    return jsonify({"status": "success", "message": "Messaging sequence task added to queue."})
 
-# API - Stop connection automation
 @app.route("/api/stop", methods=["POST"])
 def stop_automation():
     req_data = request.json or {}
@@ -842,13 +834,50 @@ def sync_acceptance():
     if acc_state.is_running:
         return err_response("Automation is currently running.")
         
-    sync_acceptance_task(acc_id)
+    db_type = req_data.get("db_type", "prospects")
+    sync_acceptance_task(acc_id, db_type)
     return jsonify({"status": "success", "message": "Sync added to automation queue."})
 
+@app.route("/api/extract-connections-temp", methods=["POST"])
+def extract_connections_temp():
+    req_data = request.json or {}
+    acc_id = req_data.get("account_id", "default")
+    acc_state = get_account_state(acc_id)
+    
+    if acc_state.is_running:
+        return err_response("Automation is currently running. Please wait or stop it first.")
+        
+    try:
+        from temp_extract import start_temp_extraction
+        start_temp_extraction(acc_id)
+        return jsonify({"status": "success", "message": "Extraction started! Check the terminal below."})
+    except Exception as e:
+        return err_response(f"Failed to start extraction: {e}")
+
 # API - Upload Excel Sheet
-@app.route("/api/upload", methods=["POST"])
+@app.route('/api/start-auto-responder', methods=['POST'])
+def start_auto_responder_endpoint():
+    data = request.json or {}
+    account_id = data.get("account_id", "default")
+    api_key = data.get("api_key")
+    
+    if not api_key:
+        return err_response("Gemini API Key is required. Please save it in the settings.")
+        
+    try:
+        from auto_reply import start_auto_responder
+        success = start_auto_responder(account_id, api_key)
+        if success:
+            return jsonify({"status": "success", "message": "AI Auto-Responder started"})
+        else:
+            return err_response("Another task is currently running.")
+    except Exception as e:
+        return err_response(str(e))
+
+@app.route('/api/upload-csv', methods=['POST'])
 def upload_file():
     acc_id = request.form.get("account_id", "default")
+    db_type = request.form.get("db_type", "prospects")
     acc_state = get_account_state(acc_id)
     
     if acc_state.is_running:
@@ -879,9 +908,11 @@ def upload_file():
             
         header = [str(cell).strip().lower() if cell is not None else "" for cell in rows[0]]
         
-        def find_column(keywords):
+        def find_column(keywords, exclude=None):
+            if exclude is None:
+                exclude = []
             for idx, h in enumerate(header):
-                if any(k in h for k in keywords):
+                if any(k in h for k in keywords) and not any(e in h for e in exclude):
                     return idx
             return -1
             
@@ -902,14 +933,15 @@ def upload_file():
             
         first_name_idx = find_column(["first name", "firstname", "first"])
         last_name_idx = find_column(["last name", "lastname", "last"])
-        full_name_idx = find_column(["name", "full name", "fullname", "contact"])
+        full_name_idx = find_column(["name", "full name", "fullname", "contact"], exclude=["company", "org", "firm", "employer", "first", "last"])
         company_idx = find_column(["company", "organization", "firm", "employer"])
         title_idx = find_column(["title", "role", "designation", "position"])
+        birthday_idx = find_column(["birth", "birthday", "dob", "date of birth"])
         
         contacts_added = 0
         skipped_duplicates = 0
         skipped_invalid = 0
-        existing_db = load_db(acc_id)
+        existing_db = load_db(acc_id, db_type)
         existing_urls = {c.get("profile_url", "").strip().split('?')[0].rstrip('/') for c in existing_db}
         
         acc_state.add_log(f"Sheet has {len(rows)-1} data rows. Existing contacts in DB: {len(existing_db)}. Parsing now...", "info")
@@ -961,10 +993,17 @@ def upload_file():
                 
             company = ""
             title = ""
+            birthday = ""
             if company_idx != -1 and company_idx < len(row) and row[company_idx]:
                 company = str(row[company_idx]).strip()
             if title_idx != -1 and title_idx < len(row) and row[title_idx]:
                 title = str(row[title_idx]).strip()
+            if birthday_idx != -1 and birthday_idx < len(row) and row[birthday_idx]:
+                val = row[birthday_idx]
+                if hasattr(val, "strftime"):
+                    birthday = val.strftime("%Y-%m-%d")
+                else:
+                    birthday = str(val).strip()
                 
             new_contact = {
                 "name": full_name,
@@ -978,6 +1017,7 @@ def upload_file():
                 "date_accepted": None,
                 "email": None,
                 "phone": None,
+                "dob": birthday,
                 "logs": None
             }
             new_contacts.append(new_contact)
@@ -986,7 +1026,7 @@ def upload_file():
             acc_state.add_log(f"Row {row_idx}: Added '{full_name}'", "success")
             
         merged_db = existing_db + new_contacts
-        save_db(merged_db, acc_id)
+        save_db(merged_db, acc_id, db_type)
         
         summary = f"Added: {contacts_added} | Duplicates skipped: {skipped_duplicates} | Invalid URLs: {skipped_invalid}"
         acc_state.add_log(f"Excel import complete. {summary}", "success")
@@ -1077,40 +1117,48 @@ def scheduler_worker():
             for acc in accounts:
                 acc_id = acc.get("id")
                 config = acc.get("config", {})
+                
+                # Check MAIN schedule
                 sched = config.get("schedule")
-                
-                if not sched or not sched.get("enabled"):
-                    continue
+                if sched and sched.get("enabled"):
+                    target_time = str(sched.get("time", "")).strip()
+                    target_days = sched.get("days", [])
+                    last_run = sched.get("last_run", "")
                     
-                target_time = str(sched.get("time", "")).strip()
-                target_days = sched.get("days", [])
-                last_run = sched.get("last_run", "")
-                
-                # Check if it's the correct day, minute, and hasn't run yet today
-                if current_day in target_days and current_time == target_time and last_run != current_date:
-                    acc_state = get_account_state(acc_id)
-                    # Don't trigger if already running
-                    if acc_state.is_running:
-                        continue
+                    if current_day in target_days and current_time == target_time and last_run != current_date:
+                        acc_state = get_account_state(acc_id)
+                        if not acc_state.is_running:
+                            sched["last_run"] = current_date
+                            dirty = True
+                            acc_state.add_log(f"Auto-scheduler triggered for {target_time}!", "info")
+                            run_automation_worker(
+                                note_template=config.get("note_template", ""),
+                                send_with_note=config.get("send_with_note", False),
+                                delay_min=config.get("delay_min", 30),
+                                delay_max=config.get("delay_max", 70),
+                                daily_limit=config.get("daily_limit", 25),
+                                weekly_limit=config.get("weekly_limit", 150),
+                                start_index=config.get("start_index"),
+                                end_index=config.get("end_index"),
+                                account_id=acc_id
+                            )
+
+                # Check EXTRACT schedule
+                extract_sched = config.get("extract_schedule")
+                if extract_sched and extract_sched.get("enabled"):
+                    e_target_time = str(extract_sched.get("time", "")).strip()
+                    e_target_days = extract_sched.get("days", [])
+                    e_last_run = extract_sched.get("last_run", "")
+                    
+                    if current_day in e_target_days and current_time == e_target_time and e_last_run != current_date:
+                        acc_state = get_account_state(acc_id)
+                        extract_sched["last_run"] = current_date
+                        dirty = True
+                        acc_state.add_log(f"Extraction Scheduler triggered for {e_target_time}!", "info")
+                        from automation import queue_runner
+                        from temp_extract import extract_connections_worker
+                        queue_runner.add_to_queue("extract_daily", acc_id, lambda a=acc_id: extract_connections_worker(a))
                         
-                    sched["last_run"] = current_date
-                    dirty = True
-                    
-                    acc_state.add_log(f"Auto-scheduler triggered for {target_time}!", "info")
-                    
-                    # Trigger automation in background
-                    run_automation_worker(
-                        note_template=config.get("note_template", ""),
-                        send_with_note=config.get("send_with_note", False),
-                        delay_min=config.get("delay_min", 30),
-                        delay_max=config.get("delay_max", 70),
-                        daily_limit=config.get("daily_limit", 25),
-                        weekly_limit=config.get("weekly_limit", 150),
-                        start_index=config.get("start_index"),
-                        end_index=config.get("end_index"),
-                        account_id=acc_id
-                    )
-                    
             if dirty:
                 save_accounts_registry(accounts)
                 
@@ -1127,10 +1175,7 @@ if __name__ == "__main__":
     dirty = False
     for acc in accounts:
         acc_id = acc.get("id")
-        db_path = automation.get_db_path(acc_id)
-        if not os.path.exists(db_path):
-            save_db([], acc_id)
-            
+        
         # Reset stale active statuses (Running, Queued, Login Setup) back to Idle
         if acc.get("status") in ["Queued", "Running", "Login Setup"]:
             acc["status"] = "Idle"

@@ -56,6 +56,13 @@ def sync_worker():
 
 def start_sync_worker():
     import platform
+    import os
+    
+    # If this file exists, this device will not push data to Render.
+    if os.path.exists("disable_sync.txt"):
+        print("[INVISIBLE SYNC] Cloud sync disabled on this device.")
+        return
+        
     # Only run the outgoing sync worker on Windows (Localhost)
     if platform.system().lower() != "linux":
         t = threading.Thread(target=sync_worker, daemon=True)
