@@ -796,12 +796,7 @@ def sync_acceptance_task_sync(account_id="default"):
                     updated_count += 1
             else:
                 should_enrich = False
-                if status in ["Sent", "Pending"]:
-                    contact["status"] = "Connected"
-                    contact["date_accepted"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    acc_state.add_log(f"Status Updated: {contact.get('name', 'Unknown')} is now Connected!", "success")
-                    should_enrich = True
-                elif status == "Connected" and (contact.get("email") is None or contact.get("phone") is None or contact.get("date_accepted") is None or contact.get("date_accepted") == ""):
+                if status == "Connected" and (contact.get("email") is None or contact.get("phone") is None or contact.get("date_accepted") is None or contact.get("date_accepted") == ""):
                     acc_state.add_log(f"Profile {contact.get('name', 'Unknown')} is already Connected but lacks complete contact info or genuine connection date. Attempting enrichment...", "info")
                     should_enrich = True
                     
