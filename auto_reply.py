@@ -72,7 +72,7 @@ def generate_ai_reply(api_key, chat_history, lead_name=""):
     client = genai.Client(api_key=api_key)
     
     system_prompt = f"""
-You are the human owner of this LinkedIn profile, working at 'NB Entrepreneurs'. YOU ARE A REAL HUMAN.
+You are the human behind this LinkedIn profile. You work as an employee at 'NB Entrepreneurs'. YOU ARE A REAL HUMAN. NEVER claim to be the CEO, Founder, or Owner of the company unless explicitly stated.
 You are chatting with a lead named: '{lead_name}'.
 
 # Core Guidelines
@@ -118,11 +118,12 @@ Optional Early Question: "Before we dive in, may I know your company name and lo
 - Negative: Wrong industry or Not in excipients (-20 & disqualify).
 - Status: 0-30 (Cold), 31-60 (Warm), 61-80 (Hot), 81+ (SQL).
 
-# Disqualification & Rejections (CRITICAL - READ CAREFULLY)
+# Disqualification, Rejections & Irrelevant Content (CRITICAL - READ CAREFULLY)
 - ABSOLUTE RULE: If the lead explicitly says they are NOT interested, do not need your products, or tells you to stop messaging: YOU MUST IMMEDIATELY STOP ALL SALES ATTEMPTS. 
 - DO NOT mention samples, DO NOT mention pricing, DO NOT ask for a meeting, and DO NOT ask any more qualification questions.
 - Your ONLY response should be a polite, 1-sentence acknowledgment (e.g., "No problem at all, thank you for your time!"). 
 - IMPORTANT: When sending this polite acknowledgment, you MUST set `requires_reply` to TRUE so the message actually gets sent to them!
+- Emotional/Irrelevant Content: If the lead's message is venting about a personal issue, a toxic workplace, politics, or something highly emotional and unrelated to business, DO NOT try to pivot to sales. Show brief, polite empathy (e.g., "I'm sorry to hear you went through that. Wishing you the best.") and set `requires_reply` to FALSE to end the conversation.
 - Inappropriate Behavior: Firmly but professionally deflect any romantic/unprofessional messages. If they persist, set `requires_reply` to false.
 
 # Ignoring End-of-Conversation Messages (CRITICAL)
@@ -241,8 +242,8 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                 continue
                 
             threads = page.locator(".msg-conversation-listitem").all()
-            # Scan top 5 recent threads
-            for i, thread in enumerate(threads[:5]):
+            # Scan top 10 recent threads
+            for i, thread in enumerate(threads[:10]):
                 if acc_state.stop_requested:
                     break
                     
@@ -258,9 +259,16 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                     try:
                         name_el = thread.locator(".msg-conversation-listitem__participant-names").first
                         if name_el.is_visible():
-                            # Extract first name
+                            # Extract first name, stripping common prefixes
                             full_name = name_el.inner_text().strip()
-                            current_lead_name = full_name.split()[0] if full_name else "there"
+                            if full_name:
+                                parts = full_name.split()
+                                prefixes = {"dr", "dr.", "mr", "mr.", "mrs", "mrs.", "ms", "ms.", "prof", "prof.", "er", "er.", "ca", "cma", "adv", "adv.", "cs"}
+                                while parts and parts[0].lower() in prefixes:
+                                    parts.pop(0)
+                                current_lead_name = parts[0] if parts else full_name.split()[0]
+                            else:
+                                current_lead_name = "there"
                     except:
                         pass
                     

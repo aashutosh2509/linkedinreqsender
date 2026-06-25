@@ -2426,6 +2426,16 @@ async function startAiResponder() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Restore and save API Key
+    const savedApiKey = localStorage.getItem('geminiApiKey');
+    if (savedApiKey && openaiApiKeyInput) {
+        openaiApiKeyInput.value = savedApiKey;
+    }
+    if (openaiApiKeyInput) {
+        openaiApiKeyInput.addEventListener('input', (e) => {
+            localStorage.setItem('geminiApiKey', e.target.value.trim());
+        });
+    }
     const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
     const btnToggleNav = document.getElementById('btn-toggle-nav');
     let isSidebarHidden = false;
