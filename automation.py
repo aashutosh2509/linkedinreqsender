@@ -489,13 +489,16 @@ def resolve_template(template, contact, sender_name=""):
     first_name = contact.get("first_name", "")
     last_name = contact.get("last_name", "")
     
-    if not first_name and full_name:
+    prefixes = {"dr", "dr.", "mr", "mr.", "mrs", "mrs.", "ms", "ms.", "prof", "prof.", "er", "er.", "ca", "cma", "adv", "adv.", "cs"}
+    
+    if full_name:
         parts = full_name.split()
-        prefixes = {"dr", "dr.", "mr", "mr.", "mrs", "mrs.", "ms", "ms.", "prof", "prof.", "er", "er.", "ca", "cma", "adv", "adv.", "cs"}
         while parts and parts[0].lower() in prefixes:
             parts.pop(0)
-        first_name = parts[0] if parts else (full_name.split()[0] if full_name.split() else "")
-        last_name = " ".join(parts[1:]) if len(parts) > 1 else ""
+        first_name = parts[0] if parts else first_name
+        last_name = " ".join(parts[1:]) if len(parts) > 1 else last_name
+    elif first_name and first_name.lower() in prefixes:
+        first_name = ""
 
     replacements = {
         "{FirstName}": first_name or full_name or "there",
