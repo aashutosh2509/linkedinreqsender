@@ -812,7 +812,9 @@ def sync_acceptance_task_sync(account_id="default"):
                             contact["email"] = email if email else "Not Shared"
                             contact["phone"] = phone if phone else "Not Shared"
                             if connection_date:
-                                contact["date_accepted"] = connection_date
+                                contact["linkedin_connection_date"] = connection_date
+                                if not contact.get("date_accepted"):
+                                    contact["date_accepted"] = connection_date
                         except Exception as enrichment_err:
                             acc_state.add_log(f"Enrichment error for {contact.get('name', 'Unknown')}: {str(enrichment_err)}", "warning")
                         finally:
@@ -1114,8 +1116,8 @@ def run_automation_worker_sync(account_id="default", config=None):
                             acc_state.add_log(f"Enrichment error for already connected user: {str(enrichment_err)}", "warning")
                     
                     if connection_date:
-                        contact["date_accepted"] = connection_date
-                    else:
+                        contact["linkedin_connection_date"] = connection_date
+                    if not contact.get("date_accepted"):
                         contact["date_accepted"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             
                     db_data_fresh = load_db(account_id)

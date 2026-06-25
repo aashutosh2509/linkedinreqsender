@@ -173,14 +173,51 @@ def get_accounts():
                     filtered_contacts.append(c)
                 except:
                     pass
-        
+                    
         if status and status != "all":
             filtered_contacts = [c for c in filtered_contacts if c.get("status") == status]
             
-        # Stats based on the FILTERED selection
-        filtered_connected = sum(1 for c in filtered_contacts if c.get("status") == "Connected")
-        filtered_pending = sum(1 for c in filtered_contacts if c.get("status") == "Pending")
-        filtered_sent = sum(1 for c in filtered_contacts if c.get("status") in ["Pending", "Connected", "Sent"])
+        # Stats based on the FILTERED selection with strict date separation
+        if start_date or end_date:
+            filtered_connected = 0
+            filtered_pending = 0
+            filtered_sent = 0
+            
+            for c in (filtered_contacts if (status and status != "all") else contacts):
+                # Check if sent date matches range
+                sent_match = False
+                raw_s = c.get("date_sent")
+                if raw_s:
+                    try:
+                        s_d = raw_s.split()[0]
+                        if not ((start_date and s_d < start_date) or (end_date and s_d > end_date)):
+                            sent_match = True
+                    except: pass
+                    
+                # Check if accepted date matches range
+                acc_match = False
+                raw_a = c.get("date_accepted")
+                if raw_a:
+                    try:
+                        a_d = raw_a.split()[0]
+                        if not ((start_date and a_d < start_date) or (end_date and a_d > end_date)):
+                            acc_match = True
+                    except: pass
+
+                # If applying a status filter, enforce it
+                if status and status != "all" and c.get("status") != status:
+                    continue
+
+                if sent_match and c.get("status") in ["Pending", "Connected", "Sent"]:
+                    filtered_sent += 1
+                if sent_match and c.get("status") == "Pending":
+                    filtered_pending += 1
+                if acc_match and c.get("status") == "Connected":
+                    filtered_connected += 1
+        else:
+            filtered_connected = sum(1 for c in filtered_contacts if c.get("status") == "Connected")
+            filtered_pending = sum(1 for c in filtered_contacts if c.get("status") == "Pending")
+            filtered_sent = sum(1 for c in filtered_contacts if c.get("status") in ["Pending", "Connected", "Sent"])
         
         # Dashboard Top-Line Stats (Always based on FULL contacts list, ignoring filters, just like the standard dashboard)
         connected_count = sum(1 for c in contacts if c.get("status") == "Connected")

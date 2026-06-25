@@ -2046,9 +2046,12 @@ function renderWorkspaceTable() {
         
         let dateVal = "—";
         if (c.status === "Connected" && c.date_accepted) {
-            dateVal = c.date_accepted.split(" ")[0];
+            dateVal = `Synced: ${c.date_accepted.split(" ")[0]}`;
+            if (c.linkedin_connection_date) {
+                dateVal += `<br><span style="font-size: 0.85em; color: var(--text-muted); opacity: 0.8;"><i data-lucide="history" style="width: 12px; height: 12px;"></i> Linked: ${c.linkedin_connection_date.split(" ")[0]}</span>`;
+            }
         } else if (c.date_sent) {
-            dateVal = c.date_sent.split(" ")[0];
+            dateVal = `Sent: ${c.date_sent.split(" ")[0]}`;
         }
         
         html += `

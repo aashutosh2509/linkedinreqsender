@@ -297,14 +297,21 @@ def send_followup_message(page, message_text, acc_state, contact_name=""):
                     const aria = btn.getAttribute('aria-label') || '';
                     if (aria.includes('Close') || btn.querySelector('svg[data-test-icon="close-small"]')) {
                         btn.click();
-                    }
+                const bubbles = document.querySelectorAll('.msg-overlay-conversation-bubble, aside.msg-overlay-container');
+                bubbles.forEach(bubble => {
+                    const closeBtns = bubble.querySelectorAll('button[aria-label^="Close"], button[aria-label^="Dismiss"], svg[data-test-icon*="close"]');
+                    closeBtns.forEach(btn => {
+                        const target = btn.tagName === 'BUTTON' ? btn : btn.closest('button');
+                        if (target) target.click();
+                    });
                 });
             }""")
             time.sleep(1)
         except:
             pass
+            
+        acc_state.add_log("Sending automated follow-up message...", "info")
         
-        # We use JS to find the exact Message button without accidentally hitting the global nav 'Messaging'
         js_find_btn = r"""() => {
             let root = document.querySelector('.pv-top-card, .ph5.pb5') || document.querySelector('main > section') || document;
             const elements = Array.from(root.querySelectorAll('button, a, [role="button"]'));
@@ -315,7 +322,7 @@ def send_followup_message(page, message_text, acc_state, contact_name=""):
                 if (rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden') {
                     const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
                     const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-                    if (text === 'message' || text === 'send message' || text === 'संदेश' || aria.includes('message') || aria.includes('संदेश')) {
+                    if (text === 'message' || text === 'send message' || aria.includes('message')) {
                         if (el.classList.contains('artdeco-button--primary') || el.classList.contains('pvs-profile-actions__action')) {
                             return el;
                         }
@@ -329,7 +336,7 @@ def send_followup_message(page, message_text, acc_state, contact_name=""):
                 if (rect.width > 0 && rect.height > 0 && window.getComputedStyle(el).visibility !== 'hidden') {
                     const text = (el.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
                     const aria = (el.getAttribute('aria-label') || '').toLowerCase();
-                    if (text === 'message' || text === 'send message' || text === 'संदेश' || aria.includes('message') || aria.includes('संदेश')) {
+                    if (text === 'message' || text === 'send message' || aria.includes('message')) {
                         return el;
                     }
                 }
@@ -337,8 +344,8 @@ def send_followup_message(page, message_text, acc_state, contact_name=""):
             return null;
         }"""
 
-        # Wait up to 8 seconds, polling every 1s
-        for _ in range(8):
+        msg_btn = None
+        for _ in range(3):
             handle = page.evaluate_handle(js_find_btn)
             msg_btn = handle.as_element()
             if msg_btn:
@@ -1629,15 +1636,11 @@ def sync_acceptance_task_sync(account_id="default", db_type="prospects"):
                             contact["phone"] = phone if phone else "Not Shared"
                             contact["dob"] = birthday if birthday else None
                             if connection_date:
-                                # If the scraped connection date is today's date, preserve today's precise acceptance time!
-                                scraped_date = connection_date.split(" ")[0]
-                                today_date = datetime.now().strftime("%Y-%m-%d")
-                                if scraped_date == today_date and contact.get("date_accepted") and contact["date_accepted"].startswith(today_date):
-                                    # Already has a precise today's timestamp, keep it!
-                                    pass
-                                else:
+                                contact["linkedin_connection_date"] = connection_date
+                                # Prioritize the date the system synced/discovered the connection so they appear on the dashboard!
+                                # Only use the scraped historical date if we have absolutely no date recorded.
+                                if not contact.get("date_accepted"):
                                     contact["date_accepted"] = connection_date
-                                    
                             # NEW AUTO-MESSAGE LOGIC
                             if contact.get("status") == "Connected" and not contact.get("message_sent"):
                                 acc_state.add_log(f"Profile is Connected and no welcome message sent yet. Attempting to send Auto-Welcome message...", "info")
