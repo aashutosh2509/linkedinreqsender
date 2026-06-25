@@ -293,10 +293,6 @@ def send_followup_message(page, message_text, acc_state, contact_name=""):
         # Close any currently open message overlay bubbles to prevent sending to the wrong person
         try:
             page.evaluate("""() => {
-                document.querySelectorAll('.msg-overlay-bubble-header__control--close-btn, button[aria-label^="Close your conversation"], .msg-overlay-container button[type="button"]').forEach(btn => {
-                    const aria = btn.getAttribute('aria-label') || '';
-                    if (aria.includes('Close') || btn.querySelector('svg[data-test-icon="close-small"]')) {
-                        btn.click();
                 const bubbles = document.querySelectorAll('.msg-overlay-conversation-bubble, aside.msg-overlay-container');
                 bubbles.forEach(bubble => {
                     const closeBtns = bubble.querySelectorAll('button[aria-label^="Close"], button[aria-label^="Dismiss"], svg[data-test-icon*="close"]');
