@@ -1159,7 +1159,7 @@ def cloud_sync_receive():
     req_data = request.json or {}
     
     # Verify hardcoded secret key
-    if req_data.get("secret_key") != "nbt_cloud_sync_secret_2026":
+    if req_data.get("secret_key") != "nbt_cloud_sync_secret_2026_device2":
         return err_response("Unauthorized", 401)
         
     try:

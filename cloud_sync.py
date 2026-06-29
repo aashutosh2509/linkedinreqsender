@@ -7,7 +7,7 @@ import urllib.error
 import automation
 
 CLOUD_URL = "https://linkedinreqsender.onrender.com"
-SECRET_KEY = "nbt_cloud_sync_secret_2026"
+SECRET_KEY = "nbt_cloud_sync_secret_2026_device2"
 
 def sync_worker():
     while True:
