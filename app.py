@@ -642,6 +642,12 @@ def get_global_stats():
     scored_leads = 0
     hot_leads = 0
     
+    sys_total_profiles = 0
+    sys_not_started = 0
+    sys_sent = 0
+    sys_pending = 0
+    sys_connected = 0
+    
     # Read active conversations from reply_state.json if it exists
     data_dir = "C:\\data" if os.name == 'nt' and os.path.exists("C:\\data") else "/data"
     reply_state_path = os.path.join(data_dir, "reply_state.json")
@@ -658,6 +664,16 @@ def get_global_stats():
     for acc in accounts:
         acc_id = acc.get("id")
         leads = load_db(acc_id, db_type="prospects")
+        
+        # Calculate system stats
+        sys_total_profiles += len(leads)
+        for lead in leads:
+            st = lead.get("status", "Not Started")
+            if st == "Not Started": sys_not_started += 1
+            elif st == "Request Sent": sys_sent += 1
+            elif st == "Pending": sys_pending += 1
+            elif st == "Connected" or st == "Extracted": sys_connected += 1
+            
         extracted_leads = [c for c in leads if c.get("status") == "Extracted"]
         all_leads.extend(extracted_leads)
         
@@ -678,7 +694,14 @@ def get_global_stats():
         "totalLeads": total_leads,
         "activeConversations": active_conversations,
         "averageScore": avg_score,
-        "hotLeads": hot_leads
+        "hotLeads": hot_leads,
+        "systemInfo": {
+            "totalProfiles": sys_total_profiles,
+            "notStarted": sys_not_started,
+            "requestsSent": sys_sent,
+            "pending": sys_pending,
+            "connected": sys_connected
+        }
     })
 
 # API - Global Leads List
