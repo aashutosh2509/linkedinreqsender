@@ -156,6 +156,8 @@ def get_accounts():
         
         # Pull stats from individual db (only prospects for total dashboard stats as requested)
         contacts = load_db(acc_id, "prospects")
+        # Exclude 'Extracted' contacts from admin dashboard stats
+        contacts = [c for c in contacts if c.get("status") != "Extracted"]
         
         filtered_contacts = contacts
         if start_date or end_date:
@@ -183,7 +185,8 @@ def get_accounts():
             filtered_pending = 0
             filtered_sent = 0
             
-            for c in (filtered_contacts if (status and status != "all") else contacts):
+            # CRITICAL FIX: Always loop over the FULL contacts list to compute date metrics properly
+            for c in contacts:
                 # Check if sent date matches range
                 sent_match = False
                 raw_s = c.get("date_sent")
@@ -204,20 +207,23 @@ def get_accounts():
                             acc_match = True
                     except: pass
 
-                # If applying a status filter, enforce it
-                if status and status != "all" and c.get("status") != status:
-                    continue
-
+                # ALWAYS increment date metrics regardless of the status filter, so "Requests Sent Today" is accurate!
                 if sent_match and c.get("status") in ["Pending", "Connected", "Sent"]:
                     filtered_sent += 1
                 if sent_match and c.get("status") == "Pending":
                     filtered_pending += 1
                 if acc_match and c.get("status") == "Connected":
                     filtered_connected += 1
+
+                # If a status filter is applied, only apply it to the final array (used for filtered_total)
+                if status and status != "all" and c.get("status") != status:
+                    continue
         else:
-            filtered_connected = sum(1 for c in filtered_contacts if c.get("status") == "Connected")
-            filtered_pending = sum(1 for c in filtered_contacts if c.get("status") == "Pending")
-            filtered_sent = sum(1 for c in filtered_contacts if c.get("status") in ["Pending", "Connected", "Sent"])
+            # If no date filter, pipeline metrics (Sent, Connected) should remain globally accurate.
+            # They should NOT be affected by the status filter (which is only meant to filter the list view and Total Database).
+            filtered_connected = sum(1 for c in contacts if c.get("status") == "Connected")
+            filtered_pending = sum(1 for c in contacts if c.get("status") == "Pending")
+            filtered_sent = sum(1 for c in contacts if c.get("status") in ["Pending", "Connected", "Sent"])
         
         # Dashboard Top-Line Stats (Always based on FULL contacts list, ignoring filters, just like the standard dashboard)
         connected_count = sum(1 for c in contacts if c.get("status") == "Connected")
@@ -251,6 +257,8 @@ def get_accounts():
             
             # Additional filtered stats used for the admin table rendering rows
             "filtered_total": len(filtered_contacts),
+            "filtered_not_started": sum(1 for c in filtered_contacts if c.get("status") == "Not Started"),
+            "filtered_failed": sum(1 for c in filtered_contacts if c.get("status") == "Failed"),
             "filtered_sent": filtered_sent,
             "filtered_connected": filtered_connected,
             "filtered_pending": filtered_pending,
@@ -618,6 +626,71 @@ def reset_contacts():
     acc_state.add_log(f"Reset {reset_count} contact(s) back to 'Not Started' ({scope} scope).", "info")
     return jsonify({"status": "success", "message": f"Successfully reset {reset_count} contacts.", "reset_count": reset_count})
 
+# API - Global Dashboard Stats
+@app.route('/api/stats', methods=['GET'])
+def get_global_stats():
+    import os, json
+    
+    accounts = load_accounts_registry()
+    all_leads = []
+    active_conversations = 0
+    total_score = 0
+    scored_leads = 0
+    hot_leads = 0
+    
+    # Read active conversations from reply_state.json if it exists
+    data_dir = "C:\\data" if os.name == 'nt' and os.path.exists("C:\\data") else "/data"
+    reply_state_path = os.path.join(data_dir, "reply_state.json")
+    if os.path.exists(reply_state_path):
+        try:
+            with open(reply_state_path, "r", encoding="utf-8") as f:
+                reply_state = json.load(f)
+                if isinstance(reply_state, dict):
+                    for acc, states in reply_state.items():
+                        if isinstance(states, dict):
+                            active_conversations += len([v for k, v in states.items() if k != "muted_threads"])
+        except: pass
+        
+    for acc in accounts:
+        acc_id = acc.get("id")
+        leads = load_db(acc_id, db_type="prospects")
+        extracted_leads = [c for c in leads if c.get("status") == "Extracted"]
+        all_leads.extend(extracted_leads)
+        
+    total_leads = len(all_leads)
+    
+    for lead in all_leads:
+        score = lead.get("score", 0)
+        status = lead.get("status", "Cold")
+        if score > 0:
+            total_score += score
+            scored_leads += 1
+        if status in ["Hot", "SQL"]:
+            hot_leads += 1
+            
+    avg_score = total_score // scored_leads if scored_leads > 0 else 0
+    
+    return jsonify({
+        "totalLeads": total_leads,
+        "activeConversations": active_conversations,
+        "averageScore": avg_score,
+        "hotLeads": hot_leads
+    })
+
+# API - Global Leads List
+@app.route('/api/leads', methods=['GET'])
+def get_global_leads():
+    accounts = load_accounts_registry()
+    all_leads = []
+    
+    for acc in accounts:
+        acc_id = acc.get("id")
+        leads = load_db(acc_id, db_type="prospects")
+        extracted_leads = [c for c in leads if c.get("status") == "Extracted"]
+        all_leads.extend(extracted_leads)
+        
+    return jsonify(all_leads)
+
 # API - Export contacts
 @app.route("/api/export", methods=["GET"])
 def export_contacts():
@@ -911,7 +984,7 @@ def start_auto_responder_endpoint():
     except Exception as e:
         return err_response(str(e))
 
-@app.route('/api/upload-csv', methods=['POST'])
+@app.route('/api/upload', methods=['POST'])
 def upload_file():
     acc_id = request.form.get("account_id", "default")
     db_type = request.form.get("db_type", "prospects")
@@ -935,6 +1008,7 @@ def upload_file():
     file.save(filepath)
     
     acc_state.add_log(f"Excel file uploaded: {filename}. Parsing contents...", "info")
+    
     try:
         wb = openpyxl.load_workbook(filepath, data_only=True)
         sheet = wb.active
@@ -944,12 +1018,11 @@ def upload_file():
             return err_response("The uploaded Excel sheet is empty.")
             
         header = [str(cell).strip().lower() if cell is not None else "" for cell in rows[0]]
+        acc_state.add_log(f"Sheet has {len(rows)-1} data rows. Parsing now...", "info")
         
-        def find_column(keywords, exclude=None):
-            if exclude is None:
-                exclude = []
+        def find_column(keywords):
             for idx, h in enumerate(header):
-                if any(k in h for k in keywords) and not any(e in h for e in exclude):
+                if any(k in h for k in keywords):
                     return idx
             return -1
             
@@ -966,14 +1039,13 @@ def upload_file():
             url_idx = found_idx
             
         if url_idx == -1:
-            return err_response("Could not find a LinkedIn URL column in your sheet. Please ensure it contains a column with 'LinkedIn' or profile URLs.")
+            return err_response("Could not find a LinkedIn URL column in your sheet.")
             
         first_name_idx = find_column(["first name", "firstname", "first"])
         last_name_idx = find_column(["last name", "lastname", "last"])
-        full_name_idx = find_column(["name", "full name", "fullname", "contact"], exclude=["company", "org", "firm", "employer", "first", "last"])
+        full_name_idx = find_column(["name", "full name", "fullname", "contact"])
         company_idx = find_column(["company", "organization", "firm", "employer"])
         title_idx = find_column(["title", "role", "designation", "position"])
-        birthday_idx = find_column(["birth", "birthday", "dob", "date of birth"])
         
         contacts_added = 0
         skipped_duplicates = 0
@@ -981,9 +1053,8 @@ def upload_file():
         existing_db = load_db(acc_id, db_type)
         existing_urls = {c.get("profile_url", "").strip().split('?')[0].rstrip('/') for c in existing_db}
         
-        acc_state.add_log(f"Sheet has {len(rows)-1} data rows. Existing contacts in DB: {len(existing_db)}. Parsing now...", "info")
-        
         new_contacts = []
+        
         for row_idx, row in enumerate(rows[1:], start=2):
             if row_idx > len(rows):
                 break
@@ -993,15 +1064,17 @@ def upload_file():
                 continue
                 
             url = str(url_val).strip()
-            norm_url, url_error = validate_and_normalize_linkedin_url(url)
-            if url_error:
-                acc_state.add_log(f"Row {row_idx}: Skipped - invalid URL '{url}': {url_error}", "warning")
-                skipped_invalid += 1
-                continue
-            url = norm_url
+            if "linkedin.com/" not in url:
+                if url.isalnum():
+                    url = f"https://www.linkedin.com/in/{url}"
+                else:
+                    skipped_invalid += 1
+                    acc_state.add_log(f"Row {row_idx}: Skipped - invalid URL '{url}'", "warning")
+                    continue
+                    
             norm_url = url.split('?')[0].rstrip('/')
             if norm_url in existing_urls:
-                acc_state.add_log(f"Row {row_idx}: Skipped - already in database: {norm_url}", "info")
+                acc_state.add_log(f"Row {row_idx}: Skipped - already in database: {url}", "info")
                 skipped_duplicates += 1
                 continue
                 
@@ -1017,12 +1090,8 @@ def upload_file():
                 full_name = str(row[full_name_idx]).strip()
                 
             if not full_name:
-                if first_name or last_name:
-                    full_name = f"{first_name} {last_name}".strip()
-                else:
-                    username = url.split("/in/")[-1].split("/")[0].replace("-", " ")
-                    full_name = username.title()
-                    
+                full_name = f"{first_name} {last_name}".strip()
+                
             if not first_name and full_name:
                 parts = full_name.split()
                 first_name = parts[0] if parts else ""
@@ -1030,17 +1099,10 @@ def upload_file():
                 
             company = ""
             title = ""
-            birthday = ""
             if company_idx != -1 and company_idx < len(row) and row[company_idx]:
                 company = str(row[company_idx]).strip()
             if title_idx != -1 and title_idx < len(row) and row[title_idx]:
                 title = str(row[title_idx]).strip()
-            if birthday_idx != -1 and birthday_idx < len(row) and row[birthday_idx]:
-                val = row[birthday_idx]
-                if hasattr(val, "strftime"):
-                    birthday = val.strftime("%Y-%m-%d")
-                else:
-                    birthday = str(val).strip()
                 
             new_contact = {
                 "name": full_name,
@@ -1052,23 +1114,22 @@ def upload_file():
                 "status": "Not Started",
                 "date_sent": None,
                 "date_accepted": None,
-                "email": None,
-                "phone": None,
-                "dob": birthday,
                 "logs": None
             }
             new_contacts.append(new_contact)
             existing_urls.add(norm_url)
             contacts_added += 1
-            acc_state.add_log(f"Row {row_idx}: Added '{full_name}'", "success")
             
         merged_db = existing_db + new_contacts
         save_db(merged_db, acc_id, db_type)
         
-        summary = f"Added: {contacts_added} | Duplicates skipped: {skipped_duplicates} | Invalid URLs: {skipped_invalid}"
-        acc_state.add_log(f"Excel import complete. {summary}", "success")
-        try: os.remove(filepath)
-        except: pass
+        acc_state.add_log(f"Successfully processed Excel. Added {contacts_added} new profiles to the list.", "success")
+        
+        try:
+            os.remove(filepath)
+        except:
+            pass
+            
         return jsonify({
             "status": "success",
             "message": f"Successfully loaded {contacts_added} profiles from Excel.",
@@ -1076,15 +1137,13 @@ def upload_file():
             "skipped_duplicates": skipped_duplicates,
             "skipped_invalid": skipped_invalid
         })
+        
     except Exception as e:
-        acc_state.add_log(f"Error parsing Excel: {str(e)}", "error")
+        acc_state.add_log(f"Error parsing uploaded Excel file: {str(e)}", "error")
         return err_response(f"Failed to process Excel file: {str(e)}")
 
 # ==========================================
 # CLOUD-SYNC ARCHITECTURE (RENDER <-> LOCAL)
-# ==========================================
-
-_sync_history = []
 
 @app.route("/api/debug-sync")
 def debug_sync():

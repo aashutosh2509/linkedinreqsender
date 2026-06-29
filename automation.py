@@ -292,14 +292,19 @@ def send_followup_message(page, message_text, acc_state, contact_name=""):
         
         # Close any currently open message overlay bubbles to prevent sending to the wrong person
         try:
+            page.keyboard.press("Escape")
+            time.sleep(0.5)
+            # Ultra-aggressive bubble closing script
             page.evaluate("""() => {
-                const bubbles = document.querySelectorAll('.msg-overlay-conversation-bubble, aside.msg-overlay-container');
-                bubbles.forEach(bubble => {
-                    const closeBtns = bubble.querySelectorAll('button[aria-label^="Close"], button[aria-label^="Dismiss"], svg[data-test-icon*="close"]');
-                    closeBtns.forEach(btn => {
-                        const target = btn.tagName === 'BUTTON' ? btn : btn.closest('button');
-                        if (target) target.click();
-                    });
+                const buttons = document.querySelectorAll('button');
+                buttons.forEach(btn => {
+                    const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+                    const cls = (btn.getAttribute('class') || '').toLowerCase();
+                    if (aria.includes('close') || aria.includes('dismiss') || cls.includes('close-btn') || cls.includes('dismiss')) {
+                        if (btn.closest('aside') || btn.closest('.msg-overlay-conversation-bubble') || btn.closest('.msg-overlay-list-bubble')) {
+                            btn.click();
+                        }
+                    }
                 });
             }""")
             time.sleep(1)
@@ -309,8 +314,9 @@ def send_followup_message(page, message_text, acc_state, contact_name=""):
         acc_state.add_log("Sending automated follow-up message...", "info")
         
         js_find_btn = r"""() => {
-            let root = document.querySelector('.pv-top-card, .ph5.pb5') || document.querySelector('main > section') || document;
-            const elements = Array.from(root.querySelectorAll('button, a, [role="button"]'));
+            let root = document.querySelector('main') || document.body;
+            // Exclude the right rail/sidebar from search to avoid 'People also viewed' buttons
+            const elements = Array.from(root.querySelectorAll('button, a, [role="button"]')).filter(el => !el.closest('aside'));
             
             // Priority 1: Primary buttons
             for (const el of elements) {
@@ -381,27 +387,22 @@ def send_followup_message(page, message_text, acc_state, contact_name=""):
             "form.msg-form"
         ]
         
-        # Click the button if no message box is currently visible
-        message_box = None
-        for sel in editor_selectors:
-            if page.locator(sel).first.is_visible():
-                message_box = page.locator(sel).first
-                break
-                
-        if not message_box:
+        # ALWAYS click the Message button on the profile to ensure the CORRECT chat box opens
+        try:
+            # Always prioritize Playwright's native click to generate trusted events.
+            msg_btn.click(force=True, timeout=2000)
+        except Exception:
+            pass
+        time.sleep(3)
+        
+        if not page.locator(editor_selectors[0]).first.is_visible():
             try:
                 msg_btn.evaluate("el => el.click()")
             except Exception:
                 pass
             time.sleep(3)
             
-            if not page.locator(editor_selectors[0]).first.is_visible():
-                try:
-                    msg_btn.click(force=True, timeout=2000)
-                except Exception:
-                    pass
-                time.sleep(3)
-                
+        message_box = None
         for sel in editor_selectors:
             if page.locator(sel).first.is_visible():
                 message_box = page.locator(sel).first
@@ -411,7 +412,34 @@ def send_followup_message(page, message_text, acc_state, contact_name=""):
             acc_state.add_log("Message box failed to appear after clicking Message.", "warning")
             return False
         
+        # CRITICAL SAFETY CHECK: Verify the chat bubble belongs to the intended person
+        try:
+            bubble = message_box.locator("xpath=ancestor::*[contains(@class, 'msg-overlay-conversation-bubble')]").first
+            header_text = bubble.locator("header").first.inner_text(timeout=2000).lower()
+            if contact_name:
+                first_name = contact_name.split()[0].lower()
+                # Bypass abort if it's a generic new message bubble or matches name
+                if first_name not in header_text and "new message" not in header_text and "messaging" not in header_text:
+                    acc_state.add_log(f"Safety Abort: Active chat bubble name ('{header_text[:20]}...') does not match target '{contact_name}'! Avoiding sending to wrong person.", "error")
+                    # Close the wrong bubble safely
+                    try:
+                        bubble.locator("button[aria-label^='Close'], button[aria-label^='Dismiss']").first.click(force=True, timeout=1000)
+                    except:
+                        pass
+                    return False
+        except Exception:
+            pass
+
         message_box.click()
+        # Clear the box first to remove LinkedIn's default smart reply icebreakers
+        try:
+            message_box.fill("")
+            page.keyboard.press("Control+A")
+            page.keyboard.press("Backspace")
+            time.sleep(0.5)
+        except:
+            pass
+            
         # Type the message like a human to avoid bot detection flags
         try:
             message_box.type(message_text, delay=random.uniform(30, 80))
@@ -485,9 +513,18 @@ def resolve_template(template, contact, sender_name=""):
     """
     if not template:
         return ""
-    full_name = contact.get("name", "")
-    first_name = contact.get("first_name", "")
-    last_name = contact.get("last_name", "")
+        
+    def format_name(n):
+        if not n: return ""
+        n = n.strip()
+        if n.isupper() or n.islower():
+            return n.title()
+        return n
+        
+    full_name = format_name(contact.get("name", ""))
+    first_name = format_name(contact.get("first_name", ""))
+    last_name = format_name(contact.get("last_name", ""))
+    sender_name = format_name(sender_name)
     
     prefixes = {"dr", "dr.", "mr", "mr.", "mrs", "mrs.", "ms", "ms.", "prof", "prof.", "er", "er.", "ca", "cma", "adv", "adv.", "cs"}
     
@@ -1353,16 +1390,19 @@ def verify_profile_status(page, username, acc_state):
         page.goto(profile_url, wait_until="domcontentloaded", timeout=20000)
         time.sleep(random.uniform(3.0, 5.0))
         
-        # Failsafe: Force open all 'More' dropdowns to reveal 'Remove connection' if they are 1st degree but badges are hidden
+        # Failsafe: Force open the FIRST 'More' dropdown in the header to reveal 'Remove connection' if they are 1st degree but badges are hidden
         try:
             page.evaluate("""() => {
-                document.querySelectorAll('button').forEach(b => {
+                const headerSection = document.querySelector('section') || document.body;
+                const buttons = headerSection.querySelectorAll('button');
+                for (let b of buttons) {
                     const t = (b.textContent || '').trim().toLowerCase();
                     const a = (b.getAttribute('aria-label') || '').toLowerCase();
                     if (t === 'more' || t === 'mehr' || t === 'अधिक' || a.includes('more actions')) {
                         b.click();
+                        break; // Only click the first one to avoid double-toggling or expanding wrong sections
                     }
-                });
+                }
             }""")
             time.sleep(1.0)
         except: pass
@@ -1412,19 +1452,22 @@ def verify_profile_status(page, username, acc_state):
                       const hasConnect = combinedConnectActions.some(el => {
                           const text = (el.textContent || '').trim().toLowerCase();
                           const label = (el.getAttribute('aria-label') || '').toLowerCase();
-                          const isConnectBtn = (text === 'connect' || text === '+ connect' || text === 'vernetzen' || text === 'कनेक्ट करें' || (label.includes('invite') && label.includes('connect')));
+                          const isConnectBtn = (text.includes('connect') || text.includes('vernetzen') || text.includes('कनेक्ट') || label.includes('connect') || label.includes('invite'));
                           return isConnectBtn && !text.includes('remove') && !label.includes('remove');
                       });
                       if (hasConnect) return { status: "Not Started", reason: "Found explicit Connect button" };
                       
-                      // Priority 5: Message button strictly in Header
+                      // If degree is explicitly known as NOT 1st, they cannot be connected, regardless of message buttons.
+                      if (degree === "other") return { status: "Not Started", reason: "Found 2nd/3rd degree badge" };
+                      
+                      // Priority 5: Message button strictly in Header (Fallback if badge is missing and no connect/remove button is found)
                       const hasMessage = headerActions.some(el => {
                           const text = (el.textContent || '').trim().toLowerCase();
                           return text === 'message' || text === 'nachricht' || text === 'संदेश';
                       });
                       if (hasMessage) return { status: "Connected", reason: "Found Message button fallback" };
                       
-                      if (degree === "other") return { status: "Not Started", reason: "Found 2nd/3rd degree badge" };
+                      return { status: "Not Started", reason: "No definitive markers found, defaulting to Not Started" };
                       return { status: "Not Started", reason: "Default fallback" };
                   }
               """)
@@ -1509,8 +1552,10 @@ def sync_acceptance_task_sync(account_id="default", db_type="prospects"):
         last_count = 0
         no_change_count = 0
         max_scroll_steps = 25
+        pending_usernames = set()
         
         acc_state.add_log("Scrolling through Sent invitations list dynamically to load all pending items...", "info")
+        
         for scroll_step in range(1, max_scroll_steps + 1):
             if acc_state.stop_requested:
                 break
@@ -1543,17 +1588,16 @@ def sync_acceptance_task_sync(account_id="default", db_type="prospects"):
                 no_change_count = 0
             last_count = current_count
             
-        pending_usernames = set()
         hrefs = page.evaluate("Array.from(document.querySelectorAll('a')).map(a => a.href).filter(h => h && h.includes('/in/'))")
         for href in hrefs:
             try:
                 url_clean = href.split("?")[0].rstrip("/")
-                username = url_clean.split("/in/")[-1].strip()
+                username = url_clean.split("/in/")[-1].strip().lower()
                 if username:
                     pending_usernames.add(username)
             except Exception:
                 continue
-                
+
         withdraw_count = len(page.locator("a:has-text('Withdraw')").all())
         empty_state_visible = False
         empty_selectors = [
@@ -1583,8 +1627,8 @@ def sync_acceptance_task_sync(account_id="default", db_type="prospects"):
                 break
             status = contact.get("status", "Not Started")
             url = contact.get("profile_url", "").strip()
-            url_clean = url.split("?")[0].rstrip("/")
-            contact_username = url_clean.split("/in/")[-1].strip() if "/in/" in url_clean else ""
+            url_clean = url.split("?")[0].strip("/")
+            contact_username = url_clean.split("/in/")[-1].strip().lower() if "/in/" in url_clean else ""
             contact_name = contact.get("name", "")
             
             # Strict skip rule for Harshit Saxena (Never touch under any sync context)
@@ -1594,7 +1638,7 @@ def sync_acceptance_task_sync(account_id="default", db_type="prospects"):
             if contact_username and contact_username in pending_usernames:
                 if status != "Pending":
                     contact["status"] = "Pending"
-                    contact["date_sent"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    # Do NOT update date_sent for auto-discovered requests so it doesn't inflate today's quota
                     acc_state.add_log(f"Status Updated: {contact.get('name', 'Unknown')} is Pending on LinkedIn (Auto-discovered).", "info")
                     updated_count += 1
             else:
@@ -1766,28 +1810,20 @@ def run_automation_worker_sync(account_id="default", config=None, db_type="prosp
         now = datetime.now()
         today_str = now.strftime("%Y-%m-%d")
         
-        # Calculate the date of the most recent Wednesday at 00:00:00
-        from datetime import timedelta
-        offset = (now.weekday() - 2) % 7
-        last_wed = now - timedelta(days=offset)
-        last_wed = last_wed.replace(hour=0, minute=0, second=0, microsecond=0)
-        
         for c in db_data:
-            if c.get("status") not in ["Pending", "Connected", "Sent"]:
-                continue
             ds = c.get("date_sent")
-            if ds:
+            status = c.get("status", "")
+            if ds and status in ["Pending", "Sent", "Connected"]:
                 try:
                     if ds.startswith(today_str):
                         sent_today_count += 1
                     dt = datetime.strptime(ds, "%Y-%m-%d %H:%M:%S")
-                    # Count if the request was sent exactly on or after the most recent Wednesday
-                    if dt >= last_wed:
+                    if (now - dt).days < 7:
                         sent_week_count += 1
                 except:
                     pass
                     
-        acc_state.add_log(f"Safety Pre-Scan: {sent_today_count} sent today, {sent_week_count} sent this week (since Wednesday). Limits: Daily {daily_limit}, Weekly {weekly_limit}.", "info")
+        acc_state.add_log(f"Safety Pre-Scan: {sent_today_count} sent today, {sent_week_count} sent this week (7 days). Limits: Daily {daily_limit}, Weekly {weekly_limit}.", "info")
         
         if sent_today_count >= daily_limit:
             acc_state.add_log(f"Daily safe quota limit of {daily_limit} reached! Stopping automation to protect your account.", "warning")
@@ -1865,9 +1901,6 @@ def run_automation_worker_sync(account_id="default", config=None, db_type="prosp
             if not profile_url:
                 contact["status"] = "Failed"
                 contact["logs"] = "Empty profile URL"
-                contact["date_sent"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                sent_today_count += 1
-                sent_week_count += 1
                 continue
                 
             orig_idx = contact.get("_original_idx", idx + 1)
@@ -2194,39 +2227,45 @@ def run_automation_worker_sync(account_id="default", config=None, db_type="prosp
                             except:
                                 pass
                         
-                        # Last resort: find via JS evaluation inside the dropdown
-                        if not dropdown_connect:
-                            try:
-                                acc_state.add_log("Trying JS-based Connect search inside dropdown...", "info")
-                                js_clicked = page.evaluate("""
-                                    () => {
-                                        const items = document.querySelectorAll('[role="menuitem"], .artdeco-dropdown__item');
-                                        for (const item of items) {
-                                            const text = (item.innerText || item.textContent || '').trim().toLowerCase();
-                                            if (text.includes('connect') && !text.includes('remove') && !text.includes('message') && !text.includes('report') && !text.includes('block')) {
-                                                const btn = item.closest('button') || item.querySelector('button') || item.closest('div[role="button"]') || item;
-                                                if (btn && btn.offsetHeight > 0) {
-                                                    btn.click();
-                                                    return true;
-                                                }
+                        # Priority 1: Find via JS evaluation inside the dropdown (Most robust for React)
+                        try:
+                            acc_state.add_log("Running JS-based Connect search inside dropdown...", "info")
+                            js_clicked = page.evaluate("""
+                                () => {
+                                    const items = document.querySelectorAll('[role="menuitem"], .artdeco-dropdown__item');
+                                    for (const item of items) {
+                                        const text = (item.innerText || item.textContent || '').trim().toLowerCase();
+                                        if (text.includes('connect') && !text.includes('remove') && !text.includes('message') && !text.includes('report') && !text.includes('block')) {
+                                            const btn = item.closest('button') || item.querySelector('button') || item.closest('div[role="button"]') || item.closest('div[role="menuitem"]') || item;
+                                            if (btn && btn.offsetHeight > 0) {
+                                                btn.click();
+                                                return true;
                                             }
                                         }
-                                        return false;
                                     }
-                                """)
-                                if js_clicked:
-                                    acc_state.add_log("JS-based click on 'Connect' in dropdown succeeded.", "success")
-                                    clicked_connect = True
-                            except Exception as js_err:
-                                acc_state.add_log(f"JS dropdown click failed: {js_err}", "warning")
-                                
+                                    return false;
+                                }
+                            """)
+                            if js_clicked:
+                                acc_state.add_log("JS-based click on 'Connect' in dropdown succeeded.", "success")
+                                clicked_connect = True
+                        except Exception as js_err:
+                            acc_state.add_log(f"JS dropdown click failed: {js_err}", "warning")
+
+                        # Priority 2: Fallback to Native Locator Click
                         if dropdown_connect and not clicked_connect:
-                            acc_state.add_log("Clicking 'Connect' in the 'More' dropdown menu...", "info")
+                            acc_state.add_log("Clicking 'Connect' via native locator fallback...", "info")
                             try:
-                                dropdown_connect.evaluate("el => el.click()")
-                            except Exception as js_err:
-                                acc_state.add_log(f"Playwright locator.evaluate click on dropdown Connect failed: {js_err}. Trying fallback locator click...", "warning")
-                                dropdown_connect.click(force=True)
+                                dropdown_connect.scroll_into_view_if_needed()
+                                time.sleep(0.5)
+                                dropdown_connect.click()
+                            except Exception as click_err:
+                                acc_state.add_log(f"Native locator click failed: {click_err}. Trying force click...", "warning")
+                                try:
+                                    dropdown_connect.click(force=True)
+                                except:
+                                    # Fallback to dispatch event if all else fails
+                                    dropdown_connect.evaluate("el => el.dispatchEvent(new MouseEvent('click', {bubbles: true}))")
                             clicked_connect = True
                         elif not clicked_connect:
                             acc_state.add_log("Could not find 'Connect' in the 'More' dropdown. Taking screenshot for debug...", "warning")
@@ -2256,9 +2295,7 @@ def run_automation_worker_sync(account_id="default", config=None, db_type="prosp
                         pass
                     contact["status"] = "Failed"
                     contact["logs"] = detailed_fail_reason
-                    contact["date_sent"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    sent_today_count += 1
-                    sent_week_count += 1
+                    
                     db_data_fresh = load_db(account_id, db_type)
                     for d in db_data_fresh:
                         if d["profile_url"] == profile_url:
@@ -2357,12 +2394,22 @@ def run_automation_worker_sync(account_id="default", config=None, db_type="prosp
                     if not note_sent_successfully:
                         send_without_note_btn = modal.locator("button:has-text('Send without a note'), button[aria-label*='Send without a note']").first
                         if send_without_note_btn.is_visible() and send_without_note_btn.is_enabled():
-                            send_without_note_btn.click(force=True)
+                            time.sleep(0.5)
+                            try:
+                                send_without_note_btn.click()
+                            except:
+                                send_without_note_btn.evaluate("el => el.dispatchEvent(new MouseEvent('click', {bubbles: true}))")
+                            time.sleep(1.0)
                             acc_state.add_log("Connection request sent (without note)!", "success")
                         else:
                             send_general = modal.locator("button:has-text('Send'), button[aria-label*='Send now'], button:has-text('Connect')").first
                             if send_general.is_visible() and send_general.is_enabled():
-                                send_general.click(force=True)
+                                time.sleep(0.5)
+                                try:
+                                    send_general.click()
+                                except:
+                                    send_general.evaluate("el => el.dispatchEvent(new MouseEvent('click', {bubbles: true}))")
+                                time.sleep(1.0)
                                 acc_state.add_log("Connection request sent!", "success")
                             else:
                                 raise Exception("Send buttons not found or disabled in modal")
@@ -2403,7 +2450,6 @@ def run_automation_worker_sync(account_id="default", config=None, db_type="prosp
                     
                 contact["status"] = "Failed"
                 contact["logs"] = str(ex)
-                contact["date_sent"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 db_data_fresh = load_db(account_id, db_type)
                 for d in db_data_fresh:
                     if d["profile_url"] == profile_url:

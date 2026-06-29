@@ -78,6 +78,13 @@ async function fetchAccounts() {
                 btn.classList.add("active");
                 
                 currentAccountId = acc.id;
+                
+                // Update Workspace Title
+                const wsNameEl = document.getElementById("crm-workspace-name");
+                if (wsNameEl) {
+                    wsNameEl.textContent = `${acc.name.toUpperCase()} WORKSPACE`;
+                }
+                
                 fetchLeads();
                 
                 // Populate Scheduler UI

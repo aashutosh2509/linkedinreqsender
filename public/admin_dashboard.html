@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leads CRM - Admin Dashboard</title>
+    <link rel="stylesheet" href="admin_style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>NBE CRM</span>
+                </div>
+            </div>
+            <ul class="nav-links">
+                <li class="active"><a href="#"><i class="fa-solid fa-house"></i> Overview</a></li>
+                <li><a href="#"><i class="fa-solid fa-users"></i> Leads</a></li>
+                <li><a href="#"><i class="fa-solid fa-comments"></i> Conversations</a></li>
+                <li><a href="#"><i class="fa-solid fa-gear"></i> Settings</a></li>
+            </ul>
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <div class="avatar">Admin</div>
+                    <div class="user-info">
+                        <span class="name">Administrator</span>
+                        <span class="role">Lead Manager</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="top-header">
+                <div class="search-bar">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="searchInput" placeholder="Search leads by name or company...">
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn" id="themeToggleBtn"><i class="fa-solid fa-moon"></i></button>
+                    <button class="icon-btn"><i class="fa-regular fa-bell"></i></button>
+                    <button class="primary-btn"><i class="fa-solid fa-plus"></i> Export Data</button>
+                </div>
+            </header>
+
+            <div class="content-wrapper">
+                <h1 class="page-title">Dashboard Overview</h1>
+                
+                <!-- Metrics Grid -->
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-icon blue"><i class="fa-solid fa-users"></i></div>
+                        <div class="metric-details">
+                            <span class="metric-title">Total Leads</span>
+                            <span class="metric-value" id="valTotalLeads">--</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon green"><i class="fa-solid fa-fire"></i></div>
+                        <div class="metric-details">
+                            <span class="metric-title">Hot Leads</span>
+                            <span class="metric-value" id="valHotLeads">--</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon purple"><i class="fa-solid fa-message"></i></div>
+                        <div class="metric-details">
+                            <span class="metric-title">Active Chats</span>
+                            <span class="metric-value" id="valActiveChats">--</span>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon orange"><i class="fa-solid fa-chart-line"></i></div>
+                        <div class="metric-details">
+                            <span class="metric-title">Avg Score</span>
+                            <span class="metric-value" id="valAvgScore">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Leads Table -->
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2>Recent Leads</h2>
+                        <div class="table-actions">
+                            <select id="statusFilter" class="glass-select">
+                                <option value="all">All Statuses</option>
+                                <option value="SQL">SQL</option>
+                                <option value="Hot">Hot</option>
+                                <option value="Warm">Warm</option>
+                                <option value="Cold">Cold</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="leads-table">
+                            <thead>
+                                <tr>
+                                    <th>Lead Info</th>
+                                    <th>LinkedIn</th>
+                                    <th>Status</th>
+                                    <th>AI Score</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leadsTableBody">
+                                <!-- Rows generated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="admin_app.js"></script>
+</body>
+</html>

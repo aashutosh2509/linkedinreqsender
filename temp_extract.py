@@ -12,12 +12,6 @@ def extract_connections_worker(account_id):
     playwright = None
     context = None
     try:
-        # Check if already running something?
-        if acc_state.is_running:
-            acc_state.add_log("Account is already running a task. Stop it first.", "warning")
-            return
-            
-        acc_state.start_running()
         acc_state.update_status(action="Extracting Connections", progress=0)
         
         playwright, context = launch_browser(account_id, headed=True)
@@ -132,15 +126,16 @@ def extract_connections_worker(account_id):
             }""")
             time.sleep(3) # Wait for network
             
+            total_on_page = len(current_batch)
             current_count = len(all_extracted_connections)
-            acc_state.add_log(f"Scrolled down. Found {current_count}/15 target organic connections so far...", "info")
-            if current_count == last_count:
+            acc_state.add_log(f"Scrolled down. Loaded {total_on_page} total connections. Found {current_count}/15 target organic connections so far...", "info")
+            if total_on_page == last_count:
                 no_change_count += 1
                 if no_change_count >= 5: # wait for a few scrolls to be sure it's the bottom
                     break
             else:
                 no_change_count = 0
-                last_count = current_count
+                last_count = total_on_page
             
         connections = list(all_extracted_connections.values())[:15] # Strictly cap to 15
         acc_state.add_log(f"Found {len(connections)} new organic connections to extract today.", "success")
@@ -265,4 +260,9 @@ def extract_connections_worker(account_id):
             except: pass
 
 def start_temp_extraction(account_id):
+    acc_state = get_account_state(account_id)
+    if acc_state.is_running:
+        acc_state.add_log("Account is already running a task. Stop it first.", "warning")
+        return
+    acc_state.start_running()
     threading.Thread(target=extract_connections_worker, args=(account_id,), daemon=True).start()

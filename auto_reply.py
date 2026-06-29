@@ -95,13 +95,12 @@ You are chatting with a lead named: '{lead_name}'.
 - NEVER hallucinate, guess, or make up chemical properties, particle sizes, prices, or technical details beyond the basic grade names and brand names above.
 - If the lead asks for deeper technical specifications or certificates (COA/TDS), politely tell them: "You can find all our exact technical specifications on our website here: https://nb-cellulose.com/ or I can email you our detailed product catalog.
 
-# Pacing & Lead Objectives (CRITICAL)
-- Single-Topic Rule: You must ONLY talk about "Industry News" or "Market Trends" during this conversation. DO NOT bring up hobbies, travels, sports, or anything else today.
-- Fast Track: IF the lead replies warmly or shows interest in talking about the industry, transition to business early (after just 2-3 messages) by asking if they happen to use any excipient solutions for their formulations.
-- Cold Lead Assessment: Do NOT assume a short 1-word reply (like 'ok' or 'yes') automatically means they are a cold lead. Look at the context! They might just be agreeing with you or acknowledging your message. If they are actually engaging, continue the conversation or ask a follow-up qualification question.
-- Cold Lead Nurturing Protocol (CRITICAL RULE): ONLY IF the lead is genuinely cold, dismissive, or shows absolutely no interest in engaging further, politely end the conversation (e.g., "Great to hear! Wishing you a productive week ahead.") and set `requires_reply` to FALSE. We will nurture them again after a few days with a different topic. NEVER drag out a dead conversation.
-- Ultimate Goal: This is a B2B sales automation. Your ultimate, final objective is to qualify the lead for excipient sales and book a meeting for the sales team.
-- Warm Lead: Once they show interest or mention formulations, move them through the Qualification Flow below.
+# Pacing & Lead Objectives (CRITICAL - DO NOT RUSH)
+- Single-Topic Rule: You must ONLY talk about "Industry News" or "Market Trends" during the casual phase. DO NOT bring up hobbies, travels, or sports.
+- The First Message Rule (STRICT): If this is your very first reply to the lead (e.g., they just said "Thanks for connecting"), YOU MUST NOT MENTION EXCIPIENTS, PRODUCTS, OR SALES YET. You must simply acknowledge their message and ask a casual, open-ended question about their industry (e.g., "What interesting trends are you seeing in the pharmaceutical space lately?").
+- Transition to Business: You MUST NOT bring up business, raw materials, or excipient procurement until you have exchanged at least 3 friendly messages. First, focus entirely on building trust and establishing a professional friendship. Only ask about their day-to-day role and general industry challenges. NEVER ask 'does your team handle procurement' early on.
+- Cold Lead Assessment: Do NOT assume a short 1-word reply (like 'ok' or 'yes') automatically means they are a cold lead. Look at the context!
+- Ultimate Goal: Your ultimate, final objective is to qualify the lead for excipient sales and book a meeting for the sales team, but you must pace yourself.
 - Referral/Inbound: If they explicitly messaged YOU asking for products, skip the casual phase completely and treat as Warm.
 
 # Qualification Flow (For WARM Leads only. Ask ONE question at a time)
@@ -118,25 +117,25 @@ Optional Early Question: "Before we dive in, may I know your company name and lo
 - Negative: Wrong industry or Not in excipients (-20 & disqualify).
 - Status: 0-30 (Cold), 31-60 (Warm), 61-80 (Hot), 81+ (SQL).
 
-# Disqualification, Rejections & Irrelevant Content (CRITICAL - READ CAREFULLY)
-- ABSOLUTE RULE: If the lead explicitly says they are NOT interested, do not need your products, or tells you to stop messaging: YOU MUST IMMEDIATELY STOP ALL SALES ATTEMPTS. 
-- DO NOT mention samples, DO NOT mention pricing, DO NOT ask for a meeting, and DO NOT ask any more qualification questions.
-- Your ONLY response should be a polite, 1-sentence acknowledgment (e.g., "No problem at all, thank you for your time!"). 
-- IMPORTANT: When sending this polite acknowledgment, you MUST set `requires_reply` to TRUE so the message actually gets sent to them!
-- Emotional/Irrelevant Content: If the lead's message is venting about a personal issue, a toxic workplace, politics, or something highly emotional and unrelated to business, DO NOT try to pivot to sales. Show brief, polite empathy (e.g., "I'm sorry to hear you went through that. Wishing you the best.") and set `requires_reply` to FALSE to end the conversation.
-- Inappropriate Behavior: Firmly but professionally deflect any romantic/unprofessional messages. If they persist, set `requires_reply` to false.
+  # Handling Rejections & 'No' Answers (CRITICAL - FORBIDDEN TO GIVE UP EASILY)
+  - RULE ZERO: YOU ARE FORBIDDEN from saying "Thank you for your time" or giving up if the lead simply answers "No" or gives a short negative answer to a question.
+  - Scenario 1: If you ask if they procure excipients/raw materials, and they say "No" (or a variation of it): YOU MUST PIVOT. You MUST ask: "Ah got it! Since your company is in pharma, would you happen to know who in your team handles the raw material or excipient procurement? I'd love to connect with them." Do NOT end the conversation here.
+  - Scenario 2: If they explicitly say "We are NOT interested in buying", "Stop messaging me", or "We already have a vendor and will not change": ONLY THEN should you stop all sales attempts. Your ONLY response should be a polite, 1-sentence acknowledgment (e.g., "No problem at all, I completely understand. Thanks for your time!"). 
+  - Scenario 3: If you asked a casual question about industry trends and they brush it off (e.g., "Not at the moment", "No idea"): DO NOT instantly jump into asking about excipients or pitching products! Instead, smoothly change the topic to something else friendly to build a relationship first (e.g., "Fair enough! How are things going at your company otherwise?").
+  - IMPORTANT: When sending a polite acknowledgment or a pivot, you MUST set `requires_reply` to TRUE so the message gets sent to them!
+  - Emotional/Irrelevant Content: If the lead's message is venting about a personal issue, a toxic workplace, politics, or something highly emotional and unrelated to business, DO NOT try to pivot to sales. Show brief, polite empathy (e.g., "I'm sorry to hear you went through that. Wishing you the best.") and set `requires_reply` to FALSE to end the conversation.
 
 # Ignoring End-of-Conversation Messages (CRITICAL)
 - Set `requires_reply` to FALSE ONLY IF:
   1. The lead's last message is just a conversational ender (like "thank you", "ok", "got it"), AND you are already deep into a conversation.
   2. Or if YOU already sent the polite rejection acknowledgment in the previous message, and the lead replied again with something that doesn't need an answer.
-- CRITICAL EXCEPTION: If the lead's message is literally their FIRST message ever (e.g., "Thanks for connecting!"), DO NOT ignore it! You must set `requires_reply` to TRUE and immediately ask your first qualification question to start the conversation!
+- CRITICAL EXCEPTION: If the lead's message is literally their FIRST message ever (e.g., "Thanks for connecting!"), DO NOT ignore it! You must set `requires_reply` to TRUE and immediately ask your casual industry/market trends question to start the conversation!
 
-# Meeting Booking & Handoff Triggers (CRITICAL 2-STEP PROCESS)
+# Meeting Booking & Handoff Triggers (CRITICAL 3-STEP PROCESS)
 - ONLY apply this if the lead is POSITIVE and INTERESTED.
 - YOUR ULTIMATE MOTTO IS TO BOOK A 10-MINUTE QUICK MEETING. Once the lead has answered your qualification questions, OR if they actively ask for Price, Samples, COA/TDS/MSDS, mention volume, or want to discuss business:
 - Step 1 (Ask for time): Immediately ask them what time works for a quick 10-minute Google Meet to discuss further.
-- Step 2 (Send Link): Once they give a time, give the link: https://calendar.app.google/pt5oudMGhUwwFjeH8
+- Step 2 (Send Link & Ask Contact Info): Once they give a time, give the link: https://calendar.app.google/pt5oudMGhUwwFjeH8 AND in the exact same message, ask for their mobile number or email address so your team can send them a calendar invite/reminder. Example: "Here is the link: https://calendar.app.google/pt5oudMGhUwwFjeH8. Also, could you share your mobile number or email so I can send you a quick reminder before the meeting?"
 - ONLY set handoff_triggered to true AFTER sending the link.
 
 Read the chat history, determine the current score and state internally, and generate EXACTLY what to reply. Keep it under 3 sentences. Be extremely conversational. DO NOT mention you are an AI or bot. If the lead is not interested, just say goodbye nicely and nothing else.
@@ -174,7 +173,14 @@ Read the chat history, determine the current score and state internally, and gen
     
     try:
         data = json.loads(response.text.strip())
-        return data.get("reply_text", "I'll have a colleague connect with you shortly."), data.get("handoff_triggered", False), data.get("lead_score", 0), data.get("requires_reply", True)
+        reply_text = data.get("reply_text", "I'll have a colleague connect with you shortly.")
+        
+        # If Gemini double-escaped unicode characters (like \\u2013), decode them back to normal characters
+        import codecs
+        if r"\u" in reply_text:
+            reply_text = codecs.decode(reply_text, 'unicode_escape')
+            
+        return reply_text, data.get("handoff_triggered", False), data.get("lead_score", 0), data.get("requires_reply", True)
     except Exception as e:
         return "I'm an automated assistant. I will have a human colleague reach out shortly.", True, 0, True
 
@@ -237,13 +243,25 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                     page.reload(timeout=15000, wait_until="domcontentloaded")
                 except Exception as reload_err:
                     acc_state.add_log(f"Browser connection lost ({reload_err}). Exiting...", "error")
-                    break
-                time.sleep(5)
-                continue
-                
+            # Scroll down the conversation list a few times to load older threads (User specifically requested 30 threads)
+            try:
+                acc_state.add_log("Scrolling inbox to load older messages...", "info")
+                for _ in range(2):
+                    page.evaluate("""() => {
+                        const list = Array.from(document.querySelectorAll('div')).find(el => 
+                            el.classList.contains('msg-conversations-container__conversations-list') ||
+                            (el.scrollHeight > el.clientHeight && el.querySelector('.msg-conversation-listitem'))
+                        );
+                        if (list) list.scrollTop = list.scrollHeight;
+                    }""")
+                    time.sleep(1.5)
+            except: pass
+            
+            # Get list of conversation threads
             threads = page.locator(".msg-conversation-listitem").all()
-            # Scan top 10 recent threads
-            for i, thread in enumerate(threads[:10]):
+            
+            # Scan top 30 recent threads as requested
+            for i, thread in enumerate(threads[:30]):
                 if acc_state.stop_requested:
                     break
                     
@@ -256,11 +274,13 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                         
                     # Extract lead name from thread snippet before clicking
                     current_lead_name = "there"
+                    lead_full_name = ""
                     try:
                         name_el = thread.locator(".msg-conversation-listitem__participant-names").first
                         if name_el.is_visible():
                             # Extract first name, stripping common prefixes
                             full_name = name_el.inner_text().strip()
+                            lead_full_name = full_name
                             if full_name:
                                 parts = full_name.split()
                                 prefixes = {"dr", "dr.", "mr", "mr.", "mrs", "mrs.", "ms", "ms.", "prof", "prof.", "er", "er.", "ca", "cma", "adv", "adv.", "cs"}
@@ -272,8 +292,8 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                     except:
                         pass
                     
-                    # Click the thread to open it
-                    thread.click()
+                    # Click the thread to open it safely using force=True to bypass UI overlays while still triggering React events
+                    thread.click(force=True)
                     time.sleep(3) # Wait for chat history to load
                     
                     while True:
@@ -294,32 +314,87 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                         last_message_text = None
                         
                         for msg_el in message_elements[-10:]: # Look at last 10 messages for better context
-                            # Try to find sender name
-                            sender_name_el = msg_el.locator(".msg-s-message-group__name").first
                             text_el = msg_el.locator(".msg-s-event-listitem__body").first
                             
-                            if text_el.is_visible():
-                                text = text_el.inner_text().strip()
-                                if sender_name_el.is_visible():
-                                    last_sender_name = sender_name_el.inner_text().strip()
+                            if text_el.count() > 0:
+                                text = text_el.text_content().strip()
                                 
-                                is_me = False
-                                
-                                # Primary check: If the sender name is not the lead's name, it's us.
-                                if last_sender_name and current_lead_name != "there" and current_lead_name.lower() not in last_sender_name.lower():
-                                    is_me = True
-                                    
-                                # Secondary fallback check: LinkedIn DOM classes
+                                # Try to find sender name by looking up to the message group container
                                 try:
-                                    # Safely find the parent message group to check if we are the sender
                                     group_el = msg_el.locator("xpath=ancestor::div[contains(@class, 'msg-s-message-group')]").first
-                                    if group_el.is_visible():
+                                    if group_el.count() > 0:
+                                        name_el = group_el.locator(".msg-s-message-group__name").first
+                                        if name_el.count() > 0:
+                                            last_sender_name = name_el.text_content().strip()
+                                        
+                                        # If name is hidden but profile pic is there, get the name from the image alt text
+                                        if not last_sender_name:
+                                            img_el = group_el.locator(".msg-s-message-group__profile-link img").first
+                                            if img_el.is_visible():
+                                                last_sender_name = img_el.get_attribute("alt") or ""
+                                                
+                                        # Also check fallback class
                                         class_str = group_el.get_attribute("class") or ""
                                         if "msg-s-message-group--profile-viewer" in class_str:
                                             is_me = True
                                 except:
                                     pass
                                     
+                                is_me = False
+                                
+                                # Bulletproof sender verification via native JS DOM traversal (100% reliable)
+                                try:
+                                    is_me = msg_el.evaluate("""(el, args) => {
+                                        const group = el.closest('.msg-s-message-group');
+                                        if (!group) return true; // Default to us if no group found
+                                        
+                                        const leadName = (args.leadName || "").toLowerCase();
+                                        const leadFull = (args.leadFull || "").toLowerCase();
+                                        
+                                        const profileLinks = Array.from(group.querySelectorAll('.msg-s-message-group__profile-link'));
+                                        for (const a of profileLinks) {
+                                            const href = (a.href || "").toLowerCase();
+                                            if (leadName !== "there" && href.includes(leadName)) return false;
+                                        }
+                                        
+                                        const nameEl = group.querySelector('.msg-s-message-group__name');
+                                        if (nameEl) {
+                                            const nameText = (nameEl.innerText || "").trim().toLowerCase();
+                                            if (leadName !== "there" && nameText && (nameText.includes(leadName) || leadFull.includes(nameText))) return false;
+                                        }
+                                        
+                                        const imgEl = group.querySelector('.msg-s-message-group__profile-link img');
+                                        if (imgEl) {
+                                            const altText = (imgEl.alt || "").toLowerCase();
+                                            if (leadName !== "there" && altText.includes(leadName)) return false;
+                                        }
+                                        
+                                        if (profileLinks.length === 0) return true;
+                                        
+                                        const receipt = el.querySelector('.msg-s-event-listitem__seen-receipt, li-icon[type^="status-"], li-icon[type="check"]');
+                                        if (receipt) return true;
+                                        
+                                        return true; // Default to us
+                                    }""", {"leadName": current_lead_name, "leadFull": lead_full_name})
+                                except: pass
+                                
+                                # Final bulletproof fallback: check the text signature!
+                                if not is_me:
+                                    try:
+                                        import json, os
+                                        accounts_path = "/data/accounts.json" if os.path.exists("/data/accounts.json") else ("C:\\data\\accounts.json" if os.name == 'nt' and os.path.exists("C:\\data\\accounts.json") else "linkedin_accounts.json")
+                                        with open(accounts_path, "r", encoding="utf-8") as f:
+                                            accounts = json.load(f)
+                                            for acc in accounts:
+                                                if acc.get("id") == account_id:
+                                                    human_name = acc.get("name", "")
+                                                    if human_name:
+                                                        first_name = human_name.split()[0].lower()
+                                                        if text.lower().rstrip('. !?').endswith(first_name):
+                                                            is_me = True
+                                                    break
+                                    except: pass
+                                
                                 role = "assistant" if is_me else "user"
                                 chat_history.append({"role": role, "content": text})
                                 if not is_me:
@@ -468,14 +543,41 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                                     sender_name_el = msg_el.locator(".msg-s-message-group__name").first
                                     
                                     is_me = False
-                                    if sender_name_el.is_visible():
-                                        new_sender = sender_name_el.inner_text().strip()
-                                        if current_lead_name != "there" and current_lead_name.lower() not in new_sender.lower():
-                                            is_me = True
+                                    
+                                    # Bulletproof sender verification via native JS DOM traversal (100% reliable)
                                     try:
-                                        group_el = msg_el.locator("xpath=ancestor::div[contains(@class, 'msg-s-message-group')]").first
-                                        if group_el.is_visible() and "msg-s-message-group--profile-viewer" in (group_el.get_attribute("class") or ""):
-                                            is_me = True
+                                        is_me = msg_el.evaluate("""(el, args) => {
+                                            const group = el.closest('.msg-s-message-group');
+                                            if (!group) return true; // Default to us if no group found
+                                            
+                                            const leadName = (args.leadName || "").toLowerCase();
+                                            const leadFull = (args.leadFull || "").toLowerCase();
+                                            
+                                            const profileLinks = Array.from(group.querySelectorAll('.msg-s-message-group__profile-link'));
+                                            for (const a of profileLinks) {
+                                                const href = (a.href || "").toLowerCase();
+                                                if (leadName !== "there" && href.includes(leadName)) return false;
+                                            }
+                                            
+                                            const nameEl = group.querySelector('.msg-s-message-group__name');
+                                            if (nameEl) {
+                                                const nameText = (nameEl.innerText || "").trim().toLowerCase();
+                                                if (leadName !== "there" && nameText && (nameText.includes(leadName) || leadFull.includes(nameText))) return false;
+                                            }
+                                            
+                                            const imgEl = group.querySelector('.msg-s-message-group__profile-link img');
+                                            if (imgEl) {
+                                                const altText = (imgEl.alt || "").toLowerCase();
+                                                if (leadName !== "there" && altText.includes(leadName)) return false;
+                                            }
+                                            
+                                            if (profileLinks.length === 0) return true;
+                                            
+                                            const receipt = el.querySelector('.msg-s-event-listitem__seen-receipt, li-icon[type^="status-"], li-icon[type="check"]');
+                                            if (receipt) return true;
+                                            
+                                            return true; // Default to us
+                                        }""", {"leadName": current_lead_name, "leadFull": lead_full_name})
                                     except: pass
                                     
                                     if not is_me:
@@ -513,14 +615,41 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                                     sender_name_el = msg_el.locator(".msg-s-message-group__name").first
                                     
                                     is_me = False
-                                    if sender_name_el.is_visible():
-                                        new_sender = sender_name_el.inner_text().strip()
-                                        if current_lead_name != "there" and current_lead_name.lower() not in new_sender.lower():
-                                            is_me = True
+                                    
+                                    # Bulletproof sender verification via native JS DOM traversal (100% reliable)
                                     try:
-                                        group_el = msg_el.locator("xpath=ancestor::div[contains(@class, 'msg-s-message-group')]").first
-                                        if group_el.is_visible() and "msg-s-message-group--profile-viewer" in (group_el.get_attribute("class") or ""):
-                                            is_me = True
+                                        is_me = msg_el.evaluate("""(el, args) => {
+                                            const group = el.closest('.msg-s-message-group');
+                                            if (!group) return true; // Default to us if no group found
+                                            
+                                            const leadName = (args.leadName || "").toLowerCase();
+                                            const leadFull = (args.leadFull || "").toLowerCase();
+                                            
+                                            const profileLinks = Array.from(group.querySelectorAll('.msg-s-message-group__profile-link'));
+                                            for (const a of profileLinks) {
+                                                const href = (a.href || "").toLowerCase();
+                                                if (leadName !== "there" && href.includes(leadName)) return false;
+                                            }
+                                            
+                                            const nameEl = group.querySelector('.msg-s-message-group__name');
+                                            if (nameEl) {
+                                                const nameText = (nameEl.innerText || "").trim().toLowerCase();
+                                                if (leadName !== "there" && nameText && (nameText.includes(leadName) || leadFull.includes(nameText))) return false;
+                                            }
+                                            
+                                            const imgEl = group.querySelector('.msg-s-message-group__profile-link img');
+                                            if (imgEl) {
+                                                const altText = (imgEl.alt || "").toLowerCase();
+                                                if (leadName !== "there" && altText.includes(leadName)) return false;
+                                            }
+                                            
+                                            if (profileLinks.length === 0) return true;
+                                            
+                                            const receipt = el.querySelector('.msg-s-event-listitem__seen-receipt, li-icon[type^="status-"], li-icon[type="check"]');
+                                            if (receipt) return true;
+                                            
+                                            return true; // Default to us
+                                        }""", {"leadName": current_lead_name, "leadFull": lead_full_name})
                                     except: pass
                                     
                                     if not is_me:

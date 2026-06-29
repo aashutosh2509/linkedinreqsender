@@ -865,8 +865,11 @@ function renderSidebarAccounts() {
     }
 }
 
-// Process Admin dashboard view counts & registered tables
 function renderAdminDashboardView() {
+    const dateFilterSelect = document.getElementById("admin-date-filter");
+    const dateFilter = dateFilterSelect ? dateFilterSelect.value : "all";
+    const useDateFiltered = dateFilter !== "all";
+
     let totalProfiles = 0;
     let totalNotStarted = 0;
     let totalSent = 0;
@@ -880,9 +883,13 @@ function renderAdminDashboardView() {
         const s = acc.stats || {};
         totalProfiles += s.total || 0;
         totalNotStarted += s.not_started || 0;
-        totalSent += s.filtered_sent !== undefined ? s.filtered_sent : (s.sent || 0);
-        totalPending += s.filtered_pending !== undefined ? s.filtered_pending : (s.pending || 0);
-        totalConnected += s.filtered_connected !== undefined ? s.filtered_connected : (s.connected || 0);
+        
+        // Only use filtered pipeline metrics if a DATE filter is active. 
+        // Otherwise use raw metrics so status filters don't destroy Acceptance Rates.
+        totalSent += (useDateFiltered && s.filtered_sent !== undefined) ? s.filtered_sent : (s.sent || 0);
+        totalPending += (useDateFiltered && s.filtered_pending !== undefined) ? s.filtered_pending : (s.pending || 0);
+        totalConnected += (useDateFiltered && s.filtered_connected !== undefined) ? s.filtered_connected : (s.connected || 0);
+        
         totalBotConnected += s.bot_connected || 0;
         totalActiveDays += s.active_days_count || 1;
     });
@@ -912,9 +919,6 @@ function renderAdminDashboardView() {
     // Update Admin Table Header Title with Selected Filters
     const adminTableTitle = document.getElementById("admin-table-title");
     if (adminTableTitle) {
-        const dateFilterSelect = document.getElementById("admin-date-filter");
-        const dateFilter = dateFilterSelect ? dateFilterSelect.value : "all";
-        
         const statusFilterSelect = document.getElementById("admin-status-filter");
         const statusFilter = statusFilterSelect ? statusFilterSelect.value : "all";
         
@@ -969,6 +973,11 @@ function renderAdminDashboardView() {
             : `<span class="count-tag" style="color:var(--text-muted);">Disabled</span>`;
             
         const isChecked = selectedAccountIdsForBulk.has(acc.id) ? "checked" : "";
+        
+        const rowSent = (useDateFiltered && s.filtered_sent !== undefined) ? s.filtered_sent : (s.sent || 0);
+        const rowConnected = (useDateFiltered && s.filtered_connected !== undefined) ? s.filtered_connected : (s.connected || 0);
+        const rowPending = (useDateFiltered && s.filtered_pending !== undefined) ? s.filtered_pending : (s.pending || 0);
+        const rowAcceptRate = (rowConnected + rowPending) > 0 ? Math.round((rowConnected / (rowConnected + rowPending)) * 100) : 0;
             
         tableHtml += `
             <tr draggable="true" class="draggable-row" data-id="${acc.id}">
@@ -983,12 +992,12 @@ function renderAdminDashboardView() {
                 <td style="font-weight: 700; vertical-align: middle;">${acc.name}</td>
                 <td style="vertical-align: middle;">${proxyBadge}</td>
                 <td style="vertical-align: middle;"><strong>${(acc.config && acc.config.daily_limit) || 25}</strong> / day</td>
-                <td style="text-align: center; vertical-align: middle;"><strong>${s.total || 0}</strong></td>
-                <td style="text-align: center; color: var(--accent-blue); font-weight:600; vertical-align: middle;">${s.filtered_sent !== undefined ? s.filtered_sent : (s.sent || 0)}</td>
-                <td style="text-align: center; color: var(--status-success); font-weight:600; vertical-align: middle;">${s.filtered_connected !== undefined ? s.filtered_connected : (s.connected || 0)}</td>
+                <td style="text-align: center; vertical-align: middle;"><strong>${s.filtered_total !== undefined ? s.filtered_total : (s.total || 0)}</strong></td>
+                <td style="text-align: center; color: var(--accent-blue); font-weight:600; vertical-align: middle;">${rowSent}</td>
+                <td style="text-align: center; color: var(--status-success); font-weight:600; vertical-align: middle;">${rowConnected}</td>
                 <td style="text-align: center; vertical-align: middle;">${s.messaged || 0}</td>
                 <td style="text-align: center; vertical-align: middle;">
-                    <strong>${s.filtered_acceptance_rate !== undefined ? s.filtered_acceptance_rate : (s.acceptance_rate || 0)}%</strong>
+                    <strong>${rowAcceptRate}%</strong>
                 </td>
                 <td style="font-size:0.75rem; color:var(--text-secondary); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align: middle;">
                     ${acc.current_action || 'Idle'}
@@ -1887,9 +1896,10 @@ function refreshWorkspaceStats() {
     today.setHours(0,0,0,0);
     
     const sentTodayCount = localContacts.filter(c => {
-        if (!["Pending", "Connected", "Sent"].includes(c.status)) return false;
         const d = parseSentDate(c);
         if (!d) return false;
+        // Only count valid sent statuses towards the quota
+        if (!["Sent", "Pending", "Connected"].includes(c.status)) return false;
         d.setHours(0,0,0,0);
         return d.toDateString() === today.toDateString();
     }).length;
@@ -1899,9 +1909,9 @@ function refreshWorkspaceStats() {
     sevenDaysAgo.setHours(0,0,0,0);
     
     const sentThisWeekCount = localContacts.filter(c => {
-        if (!["Pending", "Connected", "Sent"].includes(c.status)) return false;
         const d = parseSentDate(c);
         if (!d) return false;
+        if (!["Sent", "Pending", "Connected"].includes(c.status)) return false;
         d.setHours(0,0,0,0);
         return d >= sevenDaysAgo;
     }).length;
@@ -1999,6 +2009,9 @@ function renderWorkspaceTable() {
     // Filter status matches
     if (filter !== "all") {
         filtered = filtered.filter(c => c.status === filter);
+    } else {
+        // Hide Extracted contacts from the general Prospect Database view completely
+        filtered = filtered.filter(c => c.status !== "Extracted");
     }
     
     // Query string filters
