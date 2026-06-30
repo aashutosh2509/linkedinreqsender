@@ -43,14 +43,6 @@ async function fetchStats() {
         document.getElementById('valActiveChats').textContent = data.activeConversations || 0;
         document.getElementById('valAvgScore').textContent = data.averageScore || 0;
         document.getElementById('valHotLeads').textContent = data.hotLeads || 0;
-        
-        if (data.systemInfo) {
-            document.getElementById('valSysProfiles').textContent = data.systemInfo.totalProfiles || 0;
-            document.getElementById('valSysNotStarted').textContent = data.systemInfo.notStarted || 0;
-            document.getElementById('valSysSent').textContent = data.systemInfo.requestsSent || 0;
-            document.getElementById('valSysPending').textContent = data.systemInfo.pending || 0;
-            document.getElementById('valSysConnected').textContent = data.systemInfo.connected || 0;
-        }
     } catch (error) {
         console.error("Error fetching stats:", error);
     }
