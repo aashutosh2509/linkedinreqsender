@@ -76,6 +76,10 @@ def ensure_playwright_browsers():
 
 ensure_playwright_browsers()
 
+from threading import Thread
+
+_sync_history = []
+
 app = Flask(__name__, static_folder="public")
 CORS(app)
 
