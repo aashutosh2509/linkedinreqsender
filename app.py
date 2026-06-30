@@ -128,16 +128,12 @@ def validate_and_normalize_linkedin_url(url):
 # Serves frontend files
 @app.route("/")
 def serve_index():
-    if os.environ.get("RENDER"):
-        return send_from_directory(app.static_folder, "admin_dashboard.html")
     return send_from_directory(app.static_folder, "index.html")
 
 @app.route("/<path:path>")
 def serve_static(path):
     if path and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
-    if os.environ.get("RENDER"):
-        return send_from_directory(app.static_folder, "admin_dashboard.html")
     return send_from_directory(app.static_folder, "index.html")
 
 # API - Manage Accounts Registry & Aggregate Stats
