@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('searchInput').addEventListener('input', filterLeads);
     document.getElementById('statusFilter').addEventListener('change', filterLeads);
+    document.getElementById('profileFilter').addEventListener('change', filterLeads);
     document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
 });
 
@@ -52,6 +53,18 @@ async function fetchLeads() {
     try {
         const response = await fetch('/api/leads');
         allLeads = await response.json();
+        
+        // Populate profile filter
+        const profiles = new Set(allLeads.map(lead => lead.source_profile || "Unknown"));
+        const profileSelect = document.getElementById('profileFilter');
+        profileSelect.innerHTML = '<option value="all">All Profiles</option>';
+        Array.from(profiles).sort().forEach(profile => {
+            const option = document.createElement('option');
+            option.value = profile;
+            option.textContent = profile;
+            profileSelect.appendChild(option);
+        });
+        
         renderLeads(allLeads);
     } catch (error) {
         console.error("Error fetching leads:", error);
@@ -69,8 +82,12 @@ function filterLeads() {
         
         const status = lead.status || "Cold";
         const matchesStatus = statusFilter === 'all' || status === statusFilter;
+        
+        const profile = lead.source_profile || "Unknown";
+        const profileFilterVal = document.getElementById('profileFilter').value;
+        const matchesProfile = profileFilterVal === 'all' || profile === profileFilterVal;
 
-        return matchesSearch && matchesStatus;
+        return matchesSearch && matchesStatus && matchesProfile;
     });
 
     renderLeads(filtered);
@@ -95,7 +112,7 @@ function renderLeads(leads) {
     tbody.innerHTML = '';
 
     if (leads.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-muted);">No leads found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color: var(--text-muted);">No leads found.</td></tr>';
         return;
     }
 
@@ -110,6 +127,7 @@ function renderLeads(leads) {
         const title = lead.title || 'Unknown Title';
         const url = lead.url || '#';
         const status = lead.status || 'Cold';
+        const profile = lead.source_profile || 'Unknown';
         const score = lead.score || 0;
         
         const scoreColor = getScoreColor(score);
@@ -131,6 +149,9 @@ function renderLeads(leads) {
             </td>
             <td>
                 <span class="status-badge ${getStatusClass(status)}">${status}</span>
+            </td>
+            <td>
+                <span style="font-size: 13px; font-weight: 500; color: var(--text-muted); background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 12px; border: 1px solid var(--border-color);">${profile}</span>
             </td>
             <td>
                 <div class="score-wrapper">

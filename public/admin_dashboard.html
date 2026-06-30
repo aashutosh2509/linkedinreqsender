@@ -91,8 +91,12 @@
                     <div class="table-header">
                         <h2>Recent Leads</h2>
                         <div class="table-actions">
+                            <select id="profileFilter" class="glass-select" style="margin-right: 12px;">
+                                <option value="all">All Profiles</option>
+                            </select>
                             <select id="statusFilter" class="glass-select">
                                 <option value="all">All Statuses</option>
+                                <option value="Extracted">Extracted</option>
                                 <option value="SQL">SQL</option>
                                 <option value="Hot">Hot</option>
                                 <option value="Warm">Warm</option>
@@ -107,6 +111,7 @@
                                     <th>Lead Info</th>
                                     <th>LinkedIn</th>
                                     <th>Status</th>
+                                    <th>Profile</th>
                                     <th>AI Score</th>
                                     <th>Actions</th>
                                 </tr>

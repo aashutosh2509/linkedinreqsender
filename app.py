@@ -712,9 +712,12 @@ def get_global_leads():
     
     for acc in accounts:
         acc_id = acc.get("id")
+        acc_name = acc.get("name", "Unknown Profile")
         leads = load_db(acc_id, db_type="prospects")
-        extracted_leads = [c for c in leads if c.get("status") == "Extracted"]
-        all_leads.extend(extracted_leads)
+        for c in leads:
+            if c.get("status") == "Extracted":
+                c["source_profile"] = acc_name
+                all_leads.append(c)
         
     return jsonify(all_leads)
 
