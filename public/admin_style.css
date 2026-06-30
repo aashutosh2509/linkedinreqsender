@@ -27,15 +27,13 @@ body {
     font-family: 'Inter', sans-serif;
     background-color: var(--bg-main);
     color: var(--text-main);
-    overflow: hidden; /* Lock body scrolling completely */
+    overflow-x: hidden;
 }
 
 /* Dashboard Layout */
 .dashboard-container {
     display: flex;
-    height: 100vh;
-    width: 100vw;
-    overflow: hidden; /* Prevent expanding beyond viewport */
+    min-height: 100vh;
 }
 
 /* Sidebar */
@@ -46,6 +44,9 @@ body {
     display: flex;
     flex-direction: column;
     padding: 20px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
 }
 
 .sidebar-header {
@@ -136,9 +137,6 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
-    min-height: 0;
-    height: 100%; /* Force height to match parent container */
     background: radial-gradient(circle at top right, rgba(139, 92, 246, 0.05) 0%, transparent 40%);
 }
 
