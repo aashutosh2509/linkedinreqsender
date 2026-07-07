@@ -31,7 +31,8 @@ def sync_worker():
             # Get chats
             chats = {}
             import os
-            DATA_DIR = "C:\\data" if os.name == 'nt' and os.path.exists("C:\\data") else "/data"
+            from automation import ACCOUNTS_DB_PATH
+            DATA_DIR = os.path.dirname(ACCOUNTS_DB_PATH)
             if os.path.exists(DATA_DIR):
                 for filename in os.listdir(DATA_DIR):
                     if filename.startswith("chats_") and filename.endswith(".json"):

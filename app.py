@@ -1215,7 +1215,8 @@ def cloud_sync_receive():
         if "chats" in req_data:
             import os
             import json
-            DATA_DIR = "C:\\data" if os.name == 'nt' and os.path.exists("C:\\data") else "/data"
+            from automation import ACCOUNTS_DB_PATH
+            DATA_DIR = os.path.dirname(ACCOUNTS_DB_PATH)
             os.makedirs(DATA_DIR, exist_ok=True)
             for acc_id, chat_data in req_data["chats"].items():
                 chats_file = os.path.join(DATA_DIR, f"chats_{acc_id}.json")
@@ -1314,7 +1315,8 @@ threading.Thread(target=scheduler_worker, daemon=True).start()
 def get_chats():
     import json
     import os
-    DATA_DIR = "C:\\data" if os.name == 'nt' and os.path.exists("C:\\data") else "/data"
+    from automation import ACCOUNTS_DB_PATH
+    DATA_DIR = os.path.dirname(ACCOUNTS_DB_PATH)
     all_chats = {}
     
     # Load accounts to map IDs to friendly names
@@ -1367,7 +1369,8 @@ def get_notifications():
     import os
     from datetime import datetime, timedelta
     
-    ACCOUNTS_DB_DIR = "C:\\data\\accounts_db" if os.name == 'nt' and os.path.exists("C:\\data\\accounts_db") else "/data/accounts_db"
+    from automation import ACCOUNTS_DB_PATH
+    ACCOUNTS_DB_DIR = ACCOUNTS_DB_PATH
     notifications = []
     
     if os.path.exists(ACCOUNTS_DB_DIR):
