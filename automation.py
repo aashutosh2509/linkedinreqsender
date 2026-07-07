@@ -415,12 +415,12 @@ def send_followup_message(page, message_text, acc_state, contact_name=""):
         # CRITICAL SAFETY CHECK: Verify the chat bubble belongs to the intended person
         try:
             bubble = message_box.locator("xpath=ancestor::*[contains(@class, 'msg-overlay-conversation-bubble')]").first
-            header_text = bubble.locator("header").first.inner_text(timeout=2000).lower()
+            bubble_text = bubble.inner_text(timeout=2000).lower()
             if contact_name:
                 first_name = contact_name.split()[0].lower()
                 # Bypass abort if it's a generic new message bubble or matches name
-                if first_name not in header_text and "new message" not in header_text and "messaging" not in header_text:
-                    acc_state.add_log(f"Safety Abort: Active chat bubble name ('{header_text[:20]}...') does not match target '{contact_name}'! Avoiding sending to wrong person.", "error")
+                if first_name not in bubble_text and "new message" not in bubble_text and "messaging" not in bubble_text:
+                    acc_state.add_log(f"Safety Abort: Active chat bubble name does not match target '{contact_name}'! Avoiding sending to wrong person.", "error")
                     # Close the wrong bubble safely
                     try:
                         bubble.locator("button[aria-label^='Close'], button[aria-label^='Dismiss']").first.click(force=True, timeout=1000)
@@ -1076,6 +1076,9 @@ def scrape_contact_info(page, username, account_id="default"):
     """
     email = None
     phone = None
+    connection_date = None
+    birthday = None
+    company = None
     acc_state = get_account_state(account_id)
     try:
         # Check if we are already on this user's profile page to avoid duplicate navigation
@@ -1129,7 +1132,7 @@ def scrape_contact_info(page, username, account_id="default"):
                 
         if not clicked:
             acc_state.add_log("Could not locate or open the Contact Info link.", "warning")
-            return None, None, None
+            return None, None, None, None, None
 
             
         time.sleep(random.uniform(2.5, 4))  # Wait for the dialog to render
@@ -1240,8 +1243,6 @@ def scrape_contact_info(page, username, account_id="default"):
         except Exception as e:
             acc_state.add_log(f"JS phone extraction failed: {str(e)}", "warning")
 
-        connection_date = None
-        birthday = None
         try:
             connection_date_raw = page.evaluate(r"""() => {
                 const dialog = document.querySelector('.pv-contact-info-modal') ||
@@ -1376,9 +1377,100 @@ def scrape_contact_info(page, username, account_id="default"):
             time.sleep(1.0)
         except:
             pass
+
+        company = None
+        try:
+            # Scroll down smoothly to trigger lazy-loaded sections like Experience
+            for _ in range(4):
+                page.evaluate("window.scrollBy(0, 600)")
+                time.sleep(0.8)
+                
+            # Scroll back up to the top just in case the Top Card needs to be visible
+            page.evaluate("window.scrollTo(0, 0)")
+            time.sleep(0.5)
+            
+            company = page.evaluate("""() => {
+                // Method 1: Check the Top Card (Right panel company link) - ALWAYS LOADED IMMEDIATELY
+                const topCompanyBtn = document.querySelector('button[aria-label*="Current company"], a[aria-label*="Current company"]');
+                if (topCompanyBtn) {
+                    let text = (topCompanyBtn.innerText || topCompanyBtn.textContent || '').trim();
+                    if (text) return text;
+                }
+                
+                const topCompanyLink = document.querySelector('a[href="#experience"]');
+                if (topCompanyLink) {
+                    let text = (topCompanyLink.innerText || topCompanyLink.textContent || '').trim();
+                    if (text) return text;
+                }
+                
+                const rightPanelItems = document.querySelectorAll('.pv-text-details__right-panel-item');
+                for (let item of rightPanelItems) {
+                    let text = (item.innerText || item.textContent || '').trim();
+                    if (text && !text.toLowerCase().includes('university') && !text.toLowerCase().includes('college') && !text.toLowerCase().includes('school')) {
+                        return text;
+                    }
+                }
+                
+                // Method 2: Fallback to the Experience Section
+                let expSection = document.getElementById('experience');
+                if (expSection) {
+                    expSection = expSection.closest('section') || expSection.parentElement;
+                }
+                if (!expSection) {
+                    const spans = Array.from(document.querySelectorAll('span[aria-hidden="true"], h2 span, h2'));
+                    const expSpan = spans.find(s => (s.textContent || '').trim() === 'Experience');
+                    if (expSpan) {
+                        expSection = expSpan.closest('section') || expSpan.closest('.artdeco-card') || expSpan.parentElement.parentElement;
+                    }
+                }
+                
+                if (!expSection) return 'DEBUG: No expSection found';
+                
+                const firstItem = expSection.querySelector('li') || expSection.querySelector('.pvs-list__paged-list-item');
+                if (!firstItem) return 'DEBUG: No firstItem (li) found inside expSection';
+                
+                const img = firstItem.querySelector('img');
+                if (img && img.alt) {
+                    let alt = img.alt.trim();
+                    if (alt.toLowerCase().endsWith(' logo')) {
+                        return alt.slice(0, -5).trim();
+                    }
+                    if (alt.length > 0) return alt;
+                }
+                
+                const texts = Array.from(firstItem.querySelectorAll('span[aria-hidden="true"]')).map(s => (s.innerText || s.textContent || '').trim()).filter(t => t);
+                if (texts.length >= 2) {
+                    let companyText = texts[1];
+                    companyText = companyText.split('·')[0].trim();
+                    if (companyText.toLowerCase().includes('mos') || companyText.toLowerCase().includes('yrs') || companyText.toLowerCase().includes('full-time') || companyText.toLowerCase().includes('part-time') || companyText.toLowerCase().includes('internship')) {
+                        return texts[0];
+                    }
+                    return companyText;
+                }
+                if (texts.length === 1) return texts[0];
+                
+                return 'DEBUG: texts length 0';
+            }""")
+            
+            if company and not company.startswith('DEBUG:'):
+                acc_state.add_log(f"Extracted current company: {company}", "info")
+            else:
+                acc_state.add_log(f"Could not find current company in Experience section. {company or ''}", "warning")
+                if company and company.startswith('DEBUG:'):
+                    company = None
+                
+        except Exception as e:
+            acc_state.add_log(f"JS company extraction failed: {str(e)}", "warning")
+
     except Exception as ex:
-        acc_state.add_log(f"Failed to scrape contact info overlay: {str(ex)}", "error")
-    return email, phone, connection_date, birthday
+        err_str = str(ex)
+        acc_state.add_log(f"Failed to scrape contact info overlay: {err_str}", "error")
+        company = None
+        if "closed" in err_str.lower():
+            acc_state.add_log("Browser or page was manually closed. Stopping automation.", "warning")
+            acc_state.stop_requested = True
+
+    return email, phone, connection_date, birthday, company
 
 
 def verify_profile_status(page, username, acc_state):
@@ -1619,6 +1711,57 @@ def sync_acceptance_task_sync(account_id="default", db_type="prospects"):
         if len(pending_usernames) == 0 and not empty_state_visible:
             raise Exception("Page failed to load the invitation manager list (0 pending requests found, but no empty-state message detected). Sync aborted for safety to prevent status corruption.")
             
+        # ----------------- NEW FAST CONNECTIONS SCAN -----------------
+        recent_connections = set()
+        acc_state.add_log("Navigating to Connections page to quickly identify recent acceptances...", "info")
+        try:
+            page.goto("https://www.linkedin.com/mynetwork/invite-connect/connections/", wait_until="domcontentloaded", timeout=45000)
+            time.sleep(4)
+            
+            acc_state.add_log("Scanning recent connections...", "info")
+            for scroll_step in range(1, 12): # Scroll a few times to get the last 150-250 connections
+                if acc_state.stop_requested:
+                    break
+                
+                # Scroll down
+                try:
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                except:
+                    pass
+                time.sleep(2)
+                
+            # Extract usernames of connections securely, avoiding "People you may know" suggestions
+            conn_hrefs = page.evaluate("""() => {
+                const links = document.querySelectorAll('a');
+                const validLinks = [];
+                for (const linkEl of links) {
+                    if (!linkEl.href || !linkEl.href.includes('/in/')) continue;
+                    
+                    // Ignore anything in the right sidebar / suggestions
+                    if (linkEl.closest('aside') || linkEl.closest('.scaffold-layout__aside') || linkEl.closest('.right-rail')) continue;
+                    
+                    if (linkEl.closest('.discover-person-card')) continue;
+                    const card = linkEl.closest('.artdeco-card');
+                    if (card && (card.innerText || '').includes('More profiles')) continue;
+                    
+                    validLinks.push(linkEl.href);
+                }
+                return validLinks;
+            }""")
+            for href in conn_hrefs:
+                try:
+                    url_clean = href.split("?")[0].rstrip("/")
+                    username = url_clean.split("/in/")[-1].strip().lower()
+                    if username:
+                        recent_connections.add(username)
+                except:
+                    continue
+                    
+            acc_state.add_log(f"Fast scan complete: found {len(recent_connections)} recent connections.", "success")
+        except Exception as conn_err:
+            acc_state.add_log(f"Warning: Failed to scan connections page: {str(conn_err)}", "warning")
+        # -------------------------------------------------------------
+            
         db_data = load_db(account_id, db_type)
         updated_count = 0
         
@@ -1635,96 +1778,110 @@ def sync_acceptance_task_sync(account_id="default", db_type="prospects"):
             if "harshit" in contact_name.lower() or "saxena" in contact_name.lower() or (contact_username and "harshit-saxena" in contact_username.lower()):
                 continue
             
-            if contact_username and contact_username in pending_usernames:
-                if status != "Pending":
-                    contact["status"] = "Pending"
-                    # Do NOT update date_sent for auto-discovered requests so it doesn't inflate today's quota
-                    acc_state.add_log(f"Status Updated: {contact.get('name', 'Unknown')} is Pending on LinkedIn (Auto-discovered).", "info")
+            should_enrich = False
+            
+            if status in ["Sent", "Pending"]:
+                if contact_username and contact_username in recent_connections:
+                    # They accepted!
+                    contact["status"] = "Connected"
+                    contact["date_accepted"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    save_db(db_data, account_id, db_type) # Save immediately
+                    acc_state.add_log(f"Fast Verified: {contact_name} accepted the request! Initiating contact enrichment...", "success")
                     updated_count += 1
-            else:
-                should_enrich = False
-                if status in ["Sent", "Pending"] or (status == "Connected" and (contact.get("email") is None or contact.get("phone") is None or contact.get("date_accepted") is None or contact.get("date_accepted") == "")):
-                    if contact_username:
-                        verified_status = verify_profile_status(page, contact_username, acc_state)
-                        if verified_status == "Connected":
-                            if status != "Connected":
-                                contact["status"] = "Connected"
-                                contact["date_accepted"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                acc_state.add_log(f"Verified connection: {contact_name} is Connected! Initiating contact enrichment...", "success")
-                                updated_count += 1
-                            else:
-                                acc_state.add_log(f"Profile {contact_name} confirmed Connected but lacks info. Attempting enrichment...", "info")
-                            should_enrich = True
-                        elif verified_status == "Pending":
-                            acc_state.add_log(f"Verified status: {contact_name} is still Pending on LinkedIn.", "info")
-                            if status != "Pending":
-                                contact["status"] = "Pending"
-                                contact["date_accepted"] = None
-                                acc_state.add_log(f"Auto-fixed corrupted database status for {contact_name}: Reverted back to Pending.", "warning")
-                                updated_count += 1
-                        elif verified_status == "Not Started":
-                            contact["status"] = "Not Started"
-                            contact["date_sent"] = None
-                            contact["date_accepted"] = None
-                            acc_state.add_log(f"Verified status: {contact_name} has no active pending invitation. Status reset to 'Not Started'.", "warning")
-                            updated_count += 1
-                        else:
-                            acc_state.add_log(f"Verification failed or inconclusive for {contact_name}. Leaving status as {status} for safety.", "warning")
-                    
-                if should_enrich:
-                    if contact_username:
-                        try:
-                            email, phone, connection_date, birthday = scrape_contact_info(page, contact_username, account_id)
-                            contact["email"] = email if email else "Not Shared"
-                            contact["phone"] = phone if phone else "Not Shared"
-                            contact["dob"] = birthday if birthday else None
-                            if connection_date:
-                                contact["linkedin_connection_date"] = connection_date
-                                # Prioritize the date the system synced/discovered the connection so they appear on the dashboard!
-                                # Only use the scraped historical date if we have absolutely no date recorded.
-                                if not contact.get("date_accepted"):
-                                    contact["date_accepted"] = connection_date
-                            # NEW AUTO-MESSAGE LOGIC
-                            if contact.get("status") == "Connected" and not contact.get("message_sent"):
-                                acc_state.add_log(f"Profile is Connected and no welcome message sent yet. Attempting to send Auto-Welcome message...", "info")
+                    should_enrich = True
+                elif contact_username and contact_username in pending_usernames:
+                    # Still pending
+                    if status != "Pending":
+                        contact["status"] = "Pending"
+                        # Do NOT update date_sent for auto-discovered requests so it doesn't inflate today's quota
+                        acc_state.add_log(f"Status Updated: {contact_name} is Pending on LinkedIn (Auto-discovered).", "info")
+                        updated_count += 1
+                else:
+                    # Not in recent connections AND not in pending invitations
+                    # User requested not to wipe progress, so we leave it as Pending.
+                    acc_state.add_log(f"Note: {contact_name} not found in pending list, but keeping status as Pending to prevent data wipe.", "warning")
+            
+            if should_enrich:
+                if contact_username:
+                    try:
+                        email, phone, connection_date, birthday, new_company = scrape_contact_info(page, contact_username, account_id)
+                        contact["email"] = email if email else "Not Shared"
+                        contact["phone"] = phone if phone else "Not Shared"
+                        contact["dob"] = birthday if birthday else None
+                        
+                        if new_company:
+                            contact["company"] = new_company
+                            
+                        if connection_date:
+                            contact["linkedin_connection_date"] = connection_date
+                            # Prioritize the date the system synced/discovered the connection so they appear on the dashboard!
+                            # Only use the scraped historical date if we have absolutely no date recorded.
+                            if not contact.get("date_accepted"):
+                                contact["date_accepted"] = connection_date
+                        # NEW AUTO-MESSAGE LOGIC
+                        # Send to anyone in database who is connected, even if date_sent is empty
+                        if contact.get("status") == "Connected" and not contact.get("message_sent"):
+                            is_too_old = False
+                            best_date_str = connection_date or contact.get("linkedin_connection_date") or contact.get("date_accepted")
+                            if best_date_str:
                                 try:
-                                    template_chosen = random.choice(SPINTAX_TEMPLATES)
-                                    msg = resolve_template(template_chosen, contact, next((a.get('name').split()[0] for a in load_accounts_registry() if a['id'] == account_id), account_id))
-                                    if send_followup_message(page, msg, acc_state, contact.get('name', '')):
-                                        acc_state.add_log(f"Auto-Welcome message successfully sent to {contact.get('name')}!", "success")
-                                        contact["message_sent"] = True
-                                        contact["date_messaged"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                        
-                                        # Automatically mark any duplicate entries in the database as sent too
-                                        raw_url = contact.get("profile_url", "").strip()
-                                        url_clean = raw_url.split("?")[0].rstrip("/")
-                                        sent_username = url_clean.split("/in/")[-1].strip().lower() if "/in/" in url_clean else ""
-                                        
-                                        for c in db_data:
-                                            c_url = c.get("profile_url", "").strip()
-                                            c_clean = c_url.split("?")[0].rstrip("/")
-                                            c_username = c_clean.split("/in/")[-1].strip().lower() if "/in/" in c_clean else ""
-                                            if sent_username and c_username == sent_username:
-                                                c["message_sent"] = True
-                                                c["date_messaged"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                                
-                                    else:
-                                        acc_state.add_log(f"Failed to send Auto-Welcome message to {contact.get('name')}.", "warning")
-                                except Exception as msg_err:
-                                    acc_state.add_log(f"Auto-Welcome message error: {str(msg_err)}", "warning")
-                                    
-                        except Exception as enrichment_err:
-                            acc_state.add_log(f"Enrichment error for {contact.get('name', 'Unknown')}: {str(enrichment_err)}", "warning")
-                        finally:
+                                    conn_dt = datetime.strptime(best_date_str, "%Y-%m-%d %H:%M:%S")
+                                    if (datetime.now() - conn_dt).days > 3:
+                                        is_too_old = True
+                                except: pass
+                            elif contact_username not in recent_connections:
+                                # We have no date, and they aren't on the first page of recent connections. 
+                                # Default to safe: don't send to avoid spamming an old imported contact.
+                                is_too_old = True
+                                
+                            if is_too_old:
+                                acc_state.add_log(f"Skipping Auto-Welcome for {contact.get('name')} because connection is older than 3 days.", "info")
+                                contact["message_sent"] = True
+                                save_db(db_data, account_id, db_type)
+                            else:
+                                acc_state.add_log(f"Profile is Connected and no welcome message sent yet. Attempting to send Auto-Welcome message...", "info")
                             try:
+                                template_chosen = random.choice(SPINTAX_TEMPLATES)
+                                msg = resolve_template(template_chosen, contact, next((a.get('name').split()[0] for a in load_accounts_registry() if a['id'] == account_id), account_id))
+                                if send_followup_message(page, msg, acc_state, contact.get('name', '')):
+                                    acc_state.add_log(f"Auto-Welcome message successfully sent to {contact.get('name')}!", "success")
+                                    contact["message_sent"] = True
+                                    save_db(db_data, account_id, db_type) # Save immediately so we don't spam if browser crashes later
+                                    contact["date_messaged"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                    
+                                    # Automatically mark any duplicate entries in the database as sent too
+                                    raw_url = contact.get("profile_url", "").strip()
+                                    url_clean = raw_url.split("?")[0].rstrip("/")
+                                    sent_username = url_clean.split("/in/")[-1].strip().lower() if "/in/" in url_clean else ""
+                                    
+                                    for c in db_data:
+                                        c_url = c.get("profile_url", "").strip()
+                                        c_clean = c_url.split("?")[0].rstrip("/")
+                                        c_username = c_clean.split("/in/")[-1].strip().lower() if "/in/" in c_clean else ""
+                                        if sent_username and c_username == sent_username:
+                                            c["message_sent"] = True
+                                            c["date_messaged"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                            
+                                else:
+                                    acc_state.add_log(f"Failed to send Auto-Welcome message to {contact.get('name')}.", "warning")
+                            except Exception as msg_err:
+                                acc_state.add_log(f"Auto-Welcome message error: {str(msg_err)}", "warning")
+                                
+                    except Exception as enrichment_err:
+                        acc_state.add_log(f"Enrichment error for {contact.get('name', 'Unknown')}: {str(enrichment_err)}", "warning")
+                        if "closed" in str(enrichment_err).lower():
+                            acc_state.request_stop()
+                    finally:
+                        try:
+                            if not acc_state.stop_requested:
                                 acc_state.add_log("Returning to Sent Invitations page...", "info")
                                 try:
                                     page.goto("https://www.linkedin.com/mynetwork/invitation-manager/sent/", wait_until="domcontentloaded", timeout=60000)
                                 except Exception as e:
                                     acc_state.add_log(f"Page load taking longer than 60s, continuing anyway... ({str(e)})", "warning")
                                 time.sleep(3)
-                            except Exception as return_err:
-                                acc_state.add_log(f"Failed to navigate back to Sent Invitations: {str(return_err)}", "warning")
+                        except Exception as return_err:
+                            acc_state.add_log(f"Failed to navigate back to Sent Invitations: {str(return_err)}", "warning")
                     if status == "Connected":
                         updated_count += 1
         
@@ -1782,22 +1939,26 @@ def run_automation_worker_sync(account_id="default", config=None, db_type="prosp
         for original_idx, contact in enumerate(db_data, start=1):
             contact["_original_idx"] = original_idx
             
+        # The UI hides 'Extracted' contacts by default when numbering rows 1, 2, 3...
+        # So we must recreate that exact visible list before applying the user's start/end index slice!
+        visible_contacts = [c for c in db_data if c.get("status") != "Extracted"]
+        
         if start_index is not None or end_index is not None:
             s_idx = start_index if start_index is not None else 1
-            e_idx = end_index if end_index is not None else len(db_data)
+            e_idx = end_index if end_index is not None else len(visible_contacts)
             s_idx = max(1, s_idx)
-            e_idx = min(len(db_data), e_idx)
+            e_idx = min(len(visible_contacts), e_idx)
             
             if s_idx <= e_idx:
                 acc_state.add_log(f"Range filter active: targeting profiles from Sr. No. {s_idx} to {e_idx}.", "info")
-                db_data_slice = db_data[s_idx - 1 : e_idx]
+                db_data_slice = visible_contacts[s_idx - 1 : e_idx]
             else:
                 acc_state.add_log(f"Invalid range {s_idx} to {e_idx}. Processing full list.", "warning")
-                db_data_slice = db_data
+                db_data_slice = visible_contacts
         else:
-            db_data_slice = db_data
+            db_data_slice = visible_contacts
             
-        pending_contacts = [c for c in db_data_slice if c.get("status", "Not Started") == "Not Started"]
+        pending_contacts = [c for c in db_data_slice if c.get("status", "Not Started").strip().lower() == "not started"]
         if not pending_contacts:
             acc_state.add_log("No profiles found with 'Not Started' status in the specified range. Please add new contacts, clear the Selective Range inputs, or use the Reset button.", "warning")
             return
@@ -2037,9 +2198,6 @@ def run_automation_worker_sync(account_id="default", config=None, db_type="prosp
                     for d in db_data_fresh:
                         if d["profile_url"] == profile_url:
                             d["status"] = "Pending"
-                            if not d.get("date_sent"):
-                                d["date_sent"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                contact["date_sent"] = d["date_sent"]
                     save_db(db_data_fresh, account_id, db_type)
                     continue
 
@@ -2238,7 +2396,9 @@ def run_automation_worker_sync(account_id="default", config=None, db_type="prosp
                                         if (text.includes('connect') && !text.includes('remove') && !text.includes('message') && !text.includes('report') && !text.includes('block')) {
                                             const btn = item.closest('button') || item.querySelector('button') || item.closest('div[role="button"]') || item.closest('div[role="menuitem"]') || item;
                                             if (btn && btn.offsetHeight > 0) {
-                                                btn.click();
+                                                btn.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, cancelable: true, view: window}));
+                                                btn.dispatchEvent(new MouseEvent('mouseup', {bubbles: true, cancelable: true, view: window}));
+                                                btn.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window}));
                                                 return true;
                                             }
                                         }
@@ -2342,7 +2502,7 @@ def run_automation_worker_sync(account_id="default", config=None, db_type="prosp
                     time.sleep(1.5)
                 
                 if not modal.is_visible():
-                    acc_state.add_log("No modal is visible. The connection request was successfully sent directly!", "success")
+                    raise Exception("No connection modal appeared after clicking Connect. The click likely failed or was intercepted.")
                 else:
                     email_input = modal.locator("input[type='email'], input[name='email'], #email").first
                     if email_input.is_visible():
@@ -2392,27 +2552,47 @@ def run_automation_worker_sync(account_id="default", config=None, db_type="prosp
                                 pass
                                 
                     if not note_sent_successfully:
+                        time.sleep(1.0)
                         send_without_note_btn = modal.locator("button:has-text('Send without a note'), button[aria-label*='Send without a note']").first
                         if send_without_note_btn.is_visible() and send_without_note_btn.is_enabled():
-                            time.sleep(0.5)
+                            time.sleep(1.0)
                             try:
-                                send_without_note_btn.click()
+                                send_without_note_btn.click(force=True)
                             except:
-                                send_without_note_btn.evaluate("el => el.dispatchEvent(new MouseEvent('click', {bubbles: true}))")
+                                pass
+                            try:
+                                send_without_note_btn.evaluate("el => el.dispatchEvent(new MouseEvent('click', {bubbles: true}))", timeout=2000)
+                            except:
+                                pass
                             time.sleep(1.0)
                             acc_state.add_log("Connection request sent (without note)!", "success")
                         else:
                             send_general = modal.locator("button:has-text('Send'), button[aria-label*='Send now'], button:has-text('Connect')").first
                             if send_general.is_visible() and send_general.is_enabled():
-                                time.sleep(0.5)
+                                time.sleep(1.0)
                                 try:
-                                    send_general.click()
+                                    send_general.click(force=True)
                                 except:
-                                    send_general.evaluate("el => el.dispatchEvent(new MouseEvent('click', {bubbles: true}))")
+                                    pass
+                                try:
+                                    send_general.evaluate("el => el.dispatchEvent(new MouseEvent('click', {bubbles: true}))", timeout=2000)
+                                except:
+                                    pass
                                 time.sleep(1.0)
                                 acc_state.add_log("Connection request sent!", "success")
                             else:
                                 raise Exception("Send buttons not found or disabled in modal")
+
+                    # VERY IMPORTANT VERIFICATION: 
+                    # If we successfully clicked Send, the modal MUST close. If it doesn't close, something went wrong!
+                    try:
+                        modal.wait_for(state="hidden", timeout=3500)
+                    except:
+                        raise Exception("Modal did not close after clicking Send. LinkedIn may have blocked the request or showed an error.")
+                        
+                    # Check for LinkedIn error toasts (e.g. "You've reached your weekly limit")
+                    if page.locator(".artdeco-toast-item--error").first.is_visible():
+                        raise Exception("LinkedIn displayed an error toast. The request was blocked by limits or restrictions.")
 
                 # Success
                 sent_today_count += 1

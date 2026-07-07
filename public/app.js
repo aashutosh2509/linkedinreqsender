@@ -611,6 +611,8 @@ async function switchWorkspace(accountId) {
         weeklyLimitInput.value = cfg.weekly_limit || 150;
         liUserInput.value = acc.li_username || "";
         liPassInput.value = acc.li_password || "";
+        rangeStartInput.value = cfg.start_index || "";
+        rangeEndInput.value = cfg.end_index || "";
         
         sendWithNoteCheckbox.checked = cfg.send_with_note || false;
         noteTemplateTextarea.value = cfg.note_template || "";
@@ -1848,7 +1850,8 @@ async function fetchWorkspaceContacts() {
 }
 
 function refreshWorkspaceStats() {
-    const contactsList = localContacts;
+    // Completely exclude "Extracted" from all workspace dashboard counting as requested
+    const contactsList = localContacts.filter(c => c.status !== "Extracted");
     const total = contactsList.length;
     const pending = contactsList.filter(c => c.status === "Pending").length;
     const connected = contactsList.filter(c => c.status === "Connected").length;
@@ -1954,12 +1957,14 @@ function renderWorkspaceTable() {
     }
     
     // 1. Filter dates matches first to get dateFiltered
-    let dateFiltered = localContacts;
+    // Completely exclude "Extracted" from the workspace table view
+    const visibleContacts = localContacts.filter(c => c.status !== "Extracted");
+    let dateFiltered = visibleContacts;
     if (dateFilter !== "all") {
         const now = new Date();
         now.setHours(0,0,0,0);
         
-        dateFiltered = localContacts.filter(c => {
+        dateFiltered = visibleContacts.filter(c => {
             const d = getProspectActionDate(c);
             if (!d) return false;
             d.setHours(0,0,0,0);
@@ -2009,10 +2014,8 @@ function renderWorkspaceTable() {
     // Filter status matches
     if (filter !== "all") {
         filtered = filtered.filter(c => c.status === filter);
-    } else {
-        // Hide Extracted contacts from the general Prospect Database view completely
-        filtered = filtered.filter(c => c.status !== "Extracted");
     }
+    // Note: We no longer hide "Extracted" profiles by default as requested by the user.
     
     // Query string filters
     if (query) {
@@ -2045,8 +2048,8 @@ function renderWorkspaceTable() {
     
     // Construct Rows
     let html = "";
-    filtered.forEach(c => {
-        const originalIndex = localContacts.indexOf(c) + 1;
+    filtered.forEach((c, index) => {
+        const displayIndex = index + 1;
         const statusClass = c.status.toLowerCase().replace(" ", "-");
         
         let iconName = "help-circle";
@@ -2069,7 +2072,7 @@ function renderWorkspaceTable() {
         
         html += `
             <tr>
-                <td style="text-align: center; font-weight: 600; color: var(--text-muted);">${originalIndex}</td>
+                <td style="text-align: center; font-weight: 600; color: var(--text-muted);">${displayIndex}</td>
                 <td>
                     <div class="lead-name-cell">
                         <span class="lead-name">${c.name}</span>

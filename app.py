@@ -672,7 +672,7 @@ def get_global_stats():
             if st == "Not Started": sys_not_started += 1
             elif st == "Request Sent": sys_sent += 1
             elif st == "Pending": sys_pending += 1
-            elif st == "Connected" or st == "Extracted": sys_connected += 1
+            elif st == "Connected": sys_connected += 1
             
         extracted_leads = [c for c in leads if c.get("status") == "Extracted"]
         all_leads.extend(extracted_leads)
@@ -715,7 +715,8 @@ def get_global_leads():
         acc_name = acc.get("name", "Unknown Profile")
         leads = load_db(acc_id, db_type="prospects")
         for c in leads:
-            if c.get("status") == "Extracted":
+            status = c.get("status")
+            if status in ["Extracted", "Connected"]:
                 c["source_profile"] = acc_name
                 all_leads.append(c)
         
@@ -1295,6 +1296,114 @@ import threading
 start_sync_worker()
 threading.Thread(target=scheduler_worker, daemon=True).start()
 
+@app.route("/api/chats", methods=["GET"])
+def get_chats():
+    import json
+    import os
+    DATA_DIR = "C:\\data" if os.name == 'nt' and os.path.exists("C:\\data") else "/data"
+    all_chats = {}
+    
+    # Load accounts to map IDs to friendly names
+    accounts = load_accounts_registry()
+    account_names = {acc.get("id"): acc.get("name") for acc in accounts}
+    
+    if os.path.exists(DATA_DIR):
+        for filename in os.listdir(DATA_DIR):
+            if filename.startswith("chats_") and filename.endswith(".json"):
+                account_id = filename[len("chats_"):-len(".json")]
+                account_name = account_names.get(account_id, account_id)
+                filepath = os.path.join(DATA_DIR, filename)
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        account_chats = json.load(f)
+                        
+                        # Enrich chat data using the prospects database (so we don't have to wait for the bot to scrape it)
+                        prospects = load_db(account_id, "prospects")
+                        
+                        for thread_url, chat_data in account_chats.items():
+                            chat_data["account_id"] = account_id
+                            chat_data["account_name"] = account_name
+                            
+                            # If full name or headline is missing, pull it from prospects.db!
+                            if not chat_data.get("full_name") or not chat_data.get("headline"):
+                                lead_name = chat_data.get("lead_name", "").lower()
+                                matched = next((p for p in prospects if p.get("first_name", "").lower() == lead_name or p.get("name", "").lower().startswith(lead_name)), None)
+                                
+                                if matched:
+                                    if not chat_data.get("full_name"):
+                                        chat_data["full_name"] = matched.get("name")
+                                    if not chat_data.get("headline"):
+                                        title = matched.get("title", "")
+                                        company = matched.get("company", "")
+                                        if title and company:
+                                            chat_data["headline"] = f"{title} - {company}"
+                                        elif title:
+                                            chat_data["headline"] = title
+                                        elif company:
+                                            chat_data["headline"] = company
+                                            
+                        all_chats.update(account_chats)
+                except Exception as e:
+                    pass
+    return jsonify(all_chats)
+
+@app.route("/api/notifications", methods=["GET"])
+def get_notifications():
+    import json
+    import os
+    from datetime import datetime, timedelta
+    
+    ACCOUNTS_DB_DIR = "C:\\data\\accounts_db" if os.name == 'nt' and os.path.exists("C:\\data\\accounts_db") else "/data/accounts_db"
+    notifications = []
+    
+    if os.path.exists(ACCOUNTS_DB_DIR):
+        today = datetime.now()
+        months = ["january", "february", "march", "april", "may", "june", 
+                  "july", "august", "september", "october", "november", "december"]
+                  
+        for filename in os.listdir(ACCOUNTS_DB_DIR):
+            if filename.startswith("db_") and filename.endswith("_prospects.json"):
+                account_id = filename[len("db_"):-len("_prospects.json")]
+                filepath = os.path.join(ACCOUNTS_DB_DIR, filename)
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        leads = json.load(f)
+                        for lead in leads:
+                            dob = lead.get("dob", "Not Shared")
+                            if dob and dob.lower() != "not shared":
+                                parts = dob.strip().split()
+                                if len(parts) >= 2:
+                                    month_str = parts[0].lower()
+                                    day_str = parts[1]
+                                    if month_str in months:
+                                        month = months.index(month_str) + 1
+                                        try:
+                                            day = int(day_str)
+                                            bday_this_year = datetime(today.year, month, day)
+                                            days_until = (bday_this_year.date() - today.date()).days
+                                            
+                                            if days_until < 0:
+                                                bday_next_year = datetime(today.year + 1, month, day)
+                                                days_until = (bday_next_year.date() - today.date()).days
+                                                
+                                            if 0 <= days_until <= 7:
+                                                notif = {
+                                                    "id": f"bday_{account_id}_{lead.get('name')}",
+                                                    "type": "birthday",
+                                                    "title": f"Birthday: {lead.get('name')}",
+                                                    "message": f"{lead.get('name')} from Workspace '{account_id}' has a birthday {'today!' if days_until == 0 else f'in {days_until} days.'}",
+                                                    "account_id": account_id,
+                                                    "days_until": days_until,
+                                                    "profile_url": lead.get("profile_url", "")
+                                                }
+                                                notifications.append(notif)
+                                        except:
+                                            pass
+                except Exception as e:
+                    pass
+    
+    notifications.sort(key=lambda x: x["days_until"])
+    return jsonify(notifications)
 if __name__ == "__main__":
     # Create empty database structures if not present and reset stale statuses
     accounts = load_accounts_registry()

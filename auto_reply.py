@@ -65,6 +65,43 @@ def save_reply_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=4)
 
+def save_chat_history_to_db(account_id, lead_name, thread_url, chat_history, full_name=None, headline=None):
+    DATA_DIR = "C:\\data" if os.name == 'nt' and os.path.exists("C:\\data") else "/data"
+    os.makedirs(DATA_DIR, exist_ok=True)
+    chats_file = os.path.join(DATA_DIR, f"chats_{account_id}.json")
+    try:
+        if os.path.exists(chats_file):
+            with open(chats_file, "r", encoding="utf-8") as f:
+                chats = json.load(f)
+        else:
+            chats = {}
+            
+        # The user requested to NOT show 1-way chats in the CRM.
+        # If the prospect has never replied (no 'user' messages), we skip saving it.
+        has_user_reply = any(msg.get("role") == "user" for msg in chat_history)
+        
+        if not has_user_reply:
+            # If it's a 1-way chat, remove it from the CRM if it exists
+            if thread_url in chats:
+                del chats[thread_url]
+                with open(chats_file, "w", encoding="utf-8") as f:
+                    json.dump(chats, f, indent=4)
+            return
+            
+        chats[thread_url] = {
+            "lead_name": lead_name,
+            "full_name": full_name,
+            "headline": headline,
+            "thread_url": thread_url,
+            "messages": chat_history,
+            "last_updated": time.time()
+        }
+        
+        with open(chats_file, "w", encoding="utf-8") as f:
+            json.dump(chats, f, indent=4)
+    except Exception as e:
+        print(f"Error saving chat history: {e}")
+
 def generate_ai_reply(api_key, chat_history, lead_name=""):
     if not genai:
         raise Exception("Google GenAI package is not installed. Run 'pip install google-genai'.")
@@ -117,24 +154,25 @@ Optional Early Question: "Before we dive in, may I know your company name and lo
 - Negative: Wrong industry or Not in excipients (-20 & disqualify).
 - Status: 0-30 (Cold), 31-60 (Warm), 61-80 (Hot), 81+ (SQL).
 
-  # Handling Rejections & 'No' Answers (CRITICAL - FORBIDDEN TO GIVE UP EASILY)
-  - RULE ZERO: YOU ARE FORBIDDEN from saying "Thank you for your time" or giving up if the lead simply answers "No" or gives a short negative answer to a question.
-  - Scenario 1: If you ask if they procure excipients/raw materials, and they say "No" (or a variation of it): YOU MUST PIVOT. You MUST ask: "Ah got it! Since your company is in pharma, would you happen to know who in your team handles the raw material or excipient procurement? I'd love to connect with them." Do NOT end the conversation here.
-  - Scenario 2: If they explicitly say "We are NOT interested in buying", "Stop messaging me", or "We already have a vendor and will not change": ONLY THEN should you stop all sales attempts. Your ONLY response should be a polite, 1-sentence acknowledgment (e.g., "No problem at all, I completely understand. Thanks for your time!"). 
-  - Scenario 3: If you asked a casual question about industry trends and they brush it off (e.g., "Not at the moment", "No idea"): DO NOT instantly jump into asking about excipients or pitching products! Instead, smoothly change the topic to something else friendly to build a relationship first (e.g., "Fair enough! How are things going at your company otherwise?").
-  - IMPORTANT: When sending a polite acknowledgment or a pivot, you MUST set `requires_reply` to TRUE so the message gets sent to them!
-  - Emotional/Irrelevant Content: If the lead's message is venting about a personal issue, a toxic workplace, politics, or something highly emotional and unrelated to business, DO NOT try to pivot to sales. Show brief, polite empathy (e.g., "I'm sorry to hear you went through that. Wishing you the best.") and set `requires_reply` to FALSE to end the conversation.
+# Handling Rejections & 'No' Answers (CRITICAL - FORBIDDEN TO GIVE UP EASILY)
+- RULE ZERO: YOU ARE FORBIDDEN from saying "Thank you for your time" or giving up if the lead simply answers "No" or gives a short negative answer to a question.
+- Scenario 1: If you ask if they procure excipients/raw materials, and they say "No" (or a variation of it): YOU MUST PIVOT. You MUST ask: "Ah got it! Since your company is in pharma, would you happen to know who in your team handles the raw material or excipient procurement? I'd love to connect with them." Do NOT end the conversation here.
+- Scenario 2: If they explicitly say "We are NOT interested in buying", "Stop messaging me", or "We already have a vendor and will not change": ONLY THEN should you stop all sales attempts. Your ONLY response should be a polite, 1-sentence acknowledgment (e.g., "No problem at all, I completely understand. Thanks for your time!"). 
+- Scenario 3: If you asked a casual question about industry trends and they brush it off (e.g., "Not at the moment", "No idea"): DO NOT instantly jump into asking about excipients or pitching products! Instead, smoothly change the topic to something else friendly to build a relationship first (e.g., "Fair enough! How are things going at your company otherwise?").
+- Scenario 4 (Wrong Industry): If the lead explicitly states they are in a completely different industry (e.g., IT, Software, Hardware, Finance) and are not in Pharma, you MUST gracefully end the conversation. DO NOT ask any follow-up questions about their irrelevant industry. Just send a polite 1-sentence goodbye (e.g., "Ah, I understand! Thanks for clarifying your field, wishing you the best with your projects!"). Set `requires_reply` to TRUE to send this goodbye message.
+- Scenario 5 (Student or Not Beneficial): If the lead is a student or clearly not beneficial for business, you MUST gracefully end the conversation with a polite message. DO NOT try to sell to them or ask further questions. Send a polite 1-sentence goodbye (e.g., "Wishing you the best in your studies and future endeavors!"). Set `requires_reply` to TRUE to send this goodbye message.
+- IMPORTANT: When sending a polite acknowledgment, a pivot, or a goodbye, you MUST set `requires_reply` to TRUE so the message actually gets sent to them!
+- Emotional/Irrelevant Content: If the lead's message is venting about a personal issue, a toxic workplace, politics, or something highly emotional and unrelated to business, DO NOT try to pivot to sales. Show brief, polite empathy (e.g., "I'm sorry to hear you went through that. Wishing you the best.") and set `requires_reply` to FALSE to end the conversation.
 
-# Ignoring End-of-Conversation Messages (CRITICAL)
-- Set `requires_reply` to FALSE ONLY IF:
-  1. The lead's last message is just a conversational ender (like "thank you", "ok", "got it"), AND you are already deep into a conversation.
-  2. Or if YOU already sent the polite rejection acknowledgment in the previous message, and the lead replied again with something that doesn't need an answer.
-- CRITICAL EXCEPTION: If the lead's message is literally their FIRST message ever (e.g., "Thanks for connecting!"), DO NOT ignore it! You must set `requires_reply` to TRUE and immediately ask your casual industry/market trends question to start the conversation!
+# Reply Policy
+- ALWAYS set `requires_reply` to TRUE for almost every message, including short acknowledgments like "Thanks", "Ok", or "Got it".
+- If they just say "Thanks", respond with a friendly follow-up question (e.g., "You're welcome! How are things going with your current projects?").
+- ONLY set `requires_reply` to FALSE if you have ALREADY sent them a final polite rejection acknowledgment in the past. If they just rejected you or said they aren't interested right now, you MUST set `requires_reply` to TRUE and send the polite acknowledgment first!
 
 # Meeting Booking & Handoff Triggers (CRITICAL 3-STEP PROCESS)
 - ONLY apply this if the lead is POSITIVE and INTERESTED.
 - YOUR ULTIMATE MOTTO IS TO BOOK A 10-MINUTE QUICK MEETING. Once the lead has answered your qualification questions, OR if they actively ask for Price, Samples, COA/TDS/MSDS, mention volume, or want to discuss business:
-- Step 1 (Ask for time): Immediately ask them what time works for a quick 10-minute Google Meet to discuss further.
+- Step 1 (Ask for time): Immediately ask them what time works for a quick 10-minute Google Meet THIS WEEK (do not say "next week") so our technical team can understand their exact requirements and arrange trial samples for them to test.
 - Step 2 (Send Link & Ask Contact Info): Once they give a time, give the link: https://calendar.app.google/pt5oudMGhUwwFjeH8 AND in the exact same message, ask for their mobile number or email address so your team can send them a calendar invite/reminder. Example: "Here is the link: https://calendar.app.google/pt5oudMGhUwwFjeH8. Also, could you share your mobile number or email so I can send you a quick reminder before the meeting?"
 - ONLY set handoff_triggered to true AFTER sending the link.
 
@@ -159,7 +197,7 @@ Read the chat history, determine the current score and state internally, and gen
                 "reply_text": {"type": "STRING"},
                 "handoff_triggered": {"type": "BOOLEAN"},
                 "lead_score": {"type": "INTEGER"},
-                "requires_reply": {"type": "BOOLEAN", "description": "Set to true normally. Set to false if the user just said 'thanks' or 'ok' and no reply is needed."}
+                "requires_reply": {"type": "BOOLEAN", "description": "ALWAYS set to true, unless you have ALREADY sent a 'goodbye' or final acknowledgment in the previous turn. If the lead is rejecting you now, set this to TRUE and write your polite goodbye in reply_text."}
             },
             "required": ["reply_text", "handoff_triggered", "lead_score", "requires_reply"]
         }
@@ -174,6 +212,9 @@ Read the chat history, determine the current score and state internally, and gen
     try:
         data = json.loads(response.text.strip())
         reply_text = data.get("reply_text", "I'll have a colleague connect with you shortly.")
+        
+        # Ensure it is a single paragraph so Playwright doesn't accidentally send multiple messages on Enter
+        reply_text = reply_text.replace("\n\n", " ").replace("\n", " ").strip()
         
         # If Gemini double-escaped unicode characters (like \\u2013), decode them back to normal characters
         import codecs
@@ -261,11 +302,20 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
             threads = page.locator(".msg-conversation-listitem").all()
             
             # Scan top 30 recent threads as requested
-            for i, thread in enumerate(threads[:30]):
+            # Extract our own name to perfectly identify our outbound messages
+            my_full_name = ""
+            try:
+                my_name_el = page.locator(".global-nav__me-photo, .global-nav__me img, img.global-nav__me-photo").first
+                if my_name_el.count() > 0:
+                    my_full_name = my_name_el.get_attribute("alt") or ""
+            except: pass
+            
+            for i in range(min(30, len(threads))):
                 if acc_state.stop_requested:
                     break
                     
                 try:
+                    thread = threads[i]
                     # Skip sponsored ads
                     thread_text = thread.inner_text().strip()
                     if "Sponsored" in thread_text:
@@ -276,10 +326,10 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                     current_lead_name = "there"
                     lead_full_name = ""
                     try:
-                        name_el = thread.locator(".msg-conversation-listitem__participant-names").first
-                        if name_el.is_visible():
-                            # Extract first name, stripping common prefixes
-                            full_name = name_el.inner_text().strip()
+                        name_el = thread.locator(".msg-conversation-listitem__participant-names, h3, .msg-conversation-card__participant-names").first
+                        if name_el.count() > 0:
+                            # Extract first name, stripping common prefixes. Using text_content() handles elements scrolled out of view.
+                            full_name = name_el.text_content().strip()
                             lead_full_name = full_name
                             if full_name:
                                 parts = full_name.split()
@@ -294,16 +344,50 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                     
                     # Click the thread to open it safely using force=True to bypass UI overlays while still triggering React events
                     thread.click(force=True)
-                    time.sleep(3) # Wait for chat history to load
+                    
+                    # CRITICAL FIX: Wait for the main chat window to actually load the new thread!
+                    # If LinkedIn is slow, it might still show the previous lead's chat history.
+                    try:
+                        if current_lead_name and current_lead_name != "there":
+                            page.wait_for_function(f"""() => {{
+                                const headers = Array.from(document.querySelectorAll('h2'));
+                                return headers.some(h => h.innerText.toLowerCase().includes('{current_lead_name.lower().replace("'", "\\'")}'));
+                            }}""", timeout=5000)
+                            time.sleep(2) # EXTRA FIX: Wait for React to finish rendering the message list after the header updates!
+                        else:
+                            time.sleep(4)
+                    except:
+                        time.sleep(4) # Fallback if name matching fails or takes too long
                     
                     while True:
                         if acc_state.stop_requested:
                             break
                             
                         thread_url = page.url
-                        if thread_url in muted_threads:
-                            acc_state.add_log(f"Skipping muted thread (Human Handoff): {thread_url}", "info")
-                            break
+                        # SECONDARY NAME EXTRACTION: If we missed the name from the sidebar, grab it from the main chat header!
+                        try:
+                            header_el = page.locator("h2.msg-entity-lockup__entity-title, .msg-thread__name").first
+                            if header_el.count() > 0:
+                                header_text = header_el.text_content().strip()
+                                if header_text and header_text.lower() not in ["messaging", "messages", "linkedin member"]:
+                                    lead_full_name = header_text
+                                    parts = header_text.split()
+                                    prefixes = {"dr", "dr.", "mr", "mr.", "mrs", "mrs.", "ms", "ms.", "prof", "prof.", "er", "er.", "ca", "cma", "adv", "adv.", "cs"}
+                                    while parts and parts[0].lower() in prefixes:
+                                        parts.pop(0)
+                                    if parts:
+                                        current_lead_name = parts[0]
+                        except:
+                            pass
+                            
+                        # HEADLINE EXTRACTION
+                        lead_headline = ""
+                        try:
+                            headline_el = page.locator(".msg-entity-lockup__entity-info, .msg-thread__headline").first
+                            if headline_el.count() > 0:
+                                lead_headline = headline_el.text_content().strip()
+                        except:
+                            pass
                         
                         # Extract messages
                         # Messages are usually inside .msg-s-message-list-container
@@ -318,88 +402,82 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                             
                             if text_el.count() > 0:
                                 text = text_el.text_content().strip()
+                                is_me = False
                                 
                                 # Try to find sender name by looking up to the message group container
                                 try:
                                     group_el = msg_el.locator("xpath=ancestor::div[contains(@class, 'msg-s-message-group')]").first
                                     if group_el.count() > 0:
-                                        name_el = group_el.locator(".msg-s-message-group__name").first
-                                        if name_el.count() > 0:
-                                            last_sender_name = name_el.text_content().strip()
-                                        
-                                        # If name is hidden but profile pic is there, get the name from the image alt text
-                                        if not last_sender_name:
-                                            img_el = group_el.locator(".msg-s-message-group__profile-link img").first
-                                            if img_el.is_visible():
-                                                last_sender_name = img_el.get_attribute("alt") or ""
-                                                
-                                        # Also check fallback class
                                         class_str = group_el.get_attribute("class") or ""
-                                        if "msg-s-message-group--profile-viewer" in class_str:
+                                        if "msg-s-message-group--profile-viewer" in class_str or "msg-s-message-group--me" in class_str:
                                             is_me = True
                                 except:
                                     pass
-                                    
-                                is_me = False
                                 
                                 # Bulletproof sender verification via native JS DOM traversal (100% reliable)
                                 try:
                                     is_me = msg_el.evaluate("""(el, args) => {
+                                        // 1. Check classes on the element or any ancestor
+                                        if (el.closest('.msg-s-message-group--me, .msg-s-message-group--profile-viewer, .msg-s-event-listitem--me')) {
+                                            return true;
+                                        }
+                                        if (el.closest('.msg-s-message-group--other, .msg-s-event-listitem--other')) {
+                                            return false;
+                                        }
+                                        
                                         const group = el.closest('.msg-s-message-group');
-                                        if (!group) return true; // Default to us if no group found
+                                        const searchContainer = group || el; // Fallback to checking the element itself if no group
                                         
                                         const leadName = (args.leadName || "").toLowerCase();
                                         const leadFull = (args.leadFull || "").toLowerCase();
+                                        const myFull = (args.myFull || "").toLowerCase();
+                                        const accountId = (args.accountId || "").toLowerCase();
                                         
-                                        const profileLinks = Array.from(group.querySelectorAll('.msg-s-message-group__profile-link'));
+                                        // 2. Check the visible display name attached to the message group
+                                        const nameEl = searchContainer.querySelector('.msg-s-message-group__name, .msg-s-message-group__profile-name');
+                                        if (nameEl) {
+                                            const nameText = nameEl.innerText.toLowerCase();
+                                            // If the name matches OUR name (extracted or account ID), we sent it!
+                                            if (myFull && nameText.includes(myFull.split(' ')[0])) return true;
+                                            if (accountId && nameText.includes(accountId)) return true;
+                                            
+                                            // If the name matches THEIR name, they sent it!
+                                            if (leadName !== "there" && nameText.includes(leadName)) return false;
+                                        }
+                                        
+                                        // 3. Check the profile URLs attached to the message group
+                                        const profileLinks = Array.from(searchContainer.querySelectorAll('a[href*="/in/"]'));
                                         for (const a of profileLinks) {
                                             const href = (a.href || "").toLowerCase();
                                             if (leadName !== "there" && href.includes(leadName)) return false;
                                         }
                                         
-                                        const nameEl = group.querySelector('.msg-s-message-group__name');
-                                        if (nameEl) {
-                                            const nameText = (nameEl.innerText || "").trim().toLowerCase();
-                                            if (leadName !== "there" && nameText && (nameText.includes(leadName) || leadFull.includes(nameText))) return false;
-                                        }
-                                        
-                                        const imgEl = group.querySelector('.msg-s-message-group__profile-link img');
-                                        if (imgEl) {
-                                            const altText = (imgEl.alt || "").toLowerCase();
-                                            if (leadName !== "there" && altText.includes(leadName)) return false;
-                                        }
-                                        
-                                        if (profileLinks.length === 0) return true;
-                                        
-                                        const receipt = el.querySelector('.msg-s-event-listitem__seen-receipt, li-icon[type^="status-"], li-icon[type="check"]');
+                                        // 4. Check for 'seen' receipts (only our own outbound messages have these)
+                                        const receipt = el.querySelector('.msg-s-event-listitem__seen-receipt, li-icon[type^="status-"], li-icon[type="check"], [data-test-icon^="status-"]');
                                         if (receipt) return true;
                                         
-                                        return true; // Default to us
-                                    }""", {"leadName": current_lead_name, "leadFull": lead_full_name})
-                                except: pass
+                                        // FINAL FALLBACK
+                                        return false; // If we can't prove it's us, assume it's them to prevent dropping their messages!
+                                    }""", {"leadName": current_lead_name, "leadFull": lead_full_name, "myFull": my_full_name, "accountId": account_id})
+                                except Exception as e:
+                                    print(f"EVALUATE EXCEPTION: {e}")
+                                    pass
                                 
-                                # Final bulletproof fallback: check the text signature!
-                                if not is_me:
-                                    try:
-                                        import json, os
-                                        accounts_path = "/data/accounts.json" if os.path.exists("/data/accounts.json") else ("C:\\data\\accounts.json" if os.name == 'nt' and os.path.exists("C:\\data\\accounts.json") else "linkedin_accounts.json")
-                                        with open(accounts_path, "r", encoding="utf-8") as f:
-                                            accounts = json.load(f)
-                                            for acc in accounts:
-                                                if acc.get("id") == account_id:
-                                                    human_name = acc.get("name", "")
-                                                    if human_name:
-                                                        first_name = human_name.split()[0].lower()
-                                                        if text.lower().rstrip('. !?').endswith(first_name):
-                                                            is_me = True
-                                                    break
-                                    except: pass
+                                # (Removed signature fallback because it falsely identifies lead messages ending with our name as our own)
                                 
                                 role = "assistant" if is_me else "user"
                                 chat_history.append({"role": role, "content": text})
                                 if not is_me:
                                     last_message_text = text
                                     
+                        if chat_history:
+                            save_chat_history_to_db(account_id, current_lead_name, thread_url, chat_history, full_name=lead_full_name, headline=lead_headline)
+                            
+                        if thread_url in muted_threads:
+                            acc_state.add_log(f"Skipping AI generation for muted thread (Human Handoff): {thread_url}", "info")
+                            break
+                            
+
                         msg_hash = None
                         
                         if not chat_history:
@@ -411,6 +489,7 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                         elif chat_history[-1]["role"] == "assistant":
                             # Last message is from us. 
                             # We strictly DO NOT send automated follow-ups if they haven't replied.
+                            acc_state.add_log(f"Skipping thread because last message is from us. Content: '{chat_history[-1]['content'][:100]}'", "info")
                             break
                         else:
                             # Last message is from the lead
@@ -428,6 +507,9 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                         if user_message_count == 1:
                             acc_state.add_log(f"Hardcoded override: Forcing reply because this is '{current_lead_name}'s first message.", "info")
                             requires_reply = True
+                            if not reply_text or len(reply_text.strip()) < 2 or reply_text.lower() in ["none", "n/a", "null"]:
+                                reply_text = f"Thanks for connecting, {current_lead_name}! What interesting trends are you seeing in the pharmaceutical space lately?"
+                                acc_state.add_log(f"Fallback reply text injected: '{reply_text}'", "info")
                         
                         if not requires_reply:
                             acc_state.add_log(f"AI determined no reply is needed for '{current_lead_name}'. Skipping.", "info")
@@ -516,6 +598,9 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                                 time.sleep(2)
                                 acc_state.add_log("Reply sent successfully!", "success")
                                 
+                                chat_history.append({"role": "assistant", "content": reply_text})
+                                save_chat_history_to_db(account_id, current_lead_name, thread_url, chat_history)
+
                                 # Save state so we don't reply again
                                 reply_state[account_id][msg_hash] = True
                                 if handoff_triggered:
@@ -548,24 +633,30 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                                     try:
                                         is_me = msg_el.evaluate("""(el, args) => {
                                             const group = el.closest('.msg-s-message-group');
-                                            if (!group) return true; // Default to us if no group found
+                                            const searchContainer = group || el;
+                                            
+                                            if (searchContainer.classList.contains('msg-s-message-group--me') || 
+                                                searchContainer.classList.contains('msg-s-message-group--profile-viewer') ||
+                                                el.classList.contains('msg-s-event-listitem--me')) {
+                                                return true;
+                                            }
                                             
                                             const leadName = (args.leadName || "").toLowerCase();
                                             const leadFull = (args.leadFull || "").toLowerCase();
                                             
-                                            const profileLinks = Array.from(group.querySelectorAll('.msg-s-message-group__profile-link'));
+                                            const profileLinks = Array.from(searchContainer.querySelectorAll('.msg-s-message-group__profile-link'));
                                             for (const a of profileLinks) {
                                                 const href = (a.href || "").toLowerCase();
                                                 if (leadName !== "there" && href.includes(leadName)) return false;
                                             }
                                             
-                                            const nameEl = group.querySelector('.msg-s-message-group__name');
+                                            const nameEl = searchContainer.querySelector('.msg-s-message-group__name');
                                             if (nameEl) {
                                                 const nameText = (nameEl.innerText || "").trim().toLowerCase();
                                                 if (leadName !== "there" && nameText && (nameText.includes(leadName) || leadFull.includes(nameText))) return false;
                                             }
                                             
-                                            const imgEl = group.querySelector('.msg-s-message-group__profile-link img');
+                                            const imgEl = searchContainer.querySelector('.msg-s-message-group__profile-link img');
                                             if (imgEl) {
                                                 const altText = (imgEl.alt || "").toLowerCase();
                                                 if (leadName !== "there" && altText.includes(leadName)) return false;
@@ -576,7 +667,7 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                                             const receipt = el.querySelector('.msg-s-event-listitem__seen-receipt, li-icon[type^="status-"], li-icon[type="check"]');
                                             if (receipt) return true;
                                             
-                                            return true; // Default to us
+                                            return false; // Default to lead
                                         }""", {"leadName": current_lead_name, "leadFull": lead_full_name})
                                     except: pass
                                     
@@ -590,6 +681,10 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                                 editor.press("Enter") # fallback
                                 time.sleep(2)
                                 acc_state.add_log("Reply sent successfully via Enter!", "success")
+
+                                chat_history.append({"role": "assistant", "content": reply_text})
+                                save_chat_history_to_db(account_id, current_lead_name, thread_url, chat_history)
+                                
                                 reply_state[account_id][msg_hash] = True
                                 if handoff_triggered:
                                     reply_state[account_id].setdefault("muted_threads", []).append(thread_url)
@@ -620,24 +715,30 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                                     try:
                                         is_me = msg_el.evaluate("""(el, args) => {
                                             const group = el.closest('.msg-s-message-group');
-                                            if (!group) return true; // Default to us if no group found
+                                            const searchContainer = group || el;
+                                            
+                                            if (searchContainer.classList.contains('msg-s-message-group--me') || 
+                                                searchContainer.classList.contains('msg-s-message-group--profile-viewer') ||
+                                                el.classList.contains('msg-s-event-listitem--me')) {
+                                                return true;
+                                            }
                                             
                                             const leadName = (args.leadName || "").toLowerCase();
                                             const leadFull = (args.leadFull || "").toLowerCase();
                                             
-                                            const profileLinks = Array.from(group.querySelectorAll('.msg-s-message-group__profile-link'));
+                                            const profileLinks = Array.from(searchContainer.querySelectorAll('.msg-s-message-group__profile-link'));
                                             for (const a of profileLinks) {
                                                 const href = (a.href || "").toLowerCase();
                                                 if (leadName !== "there" && href.includes(leadName)) return false;
                                             }
                                             
-                                            const nameEl = group.querySelector('.msg-s-message-group__name');
+                                            const nameEl = searchContainer.querySelector('.msg-s-message-group__name');
                                             if (nameEl) {
                                                 const nameText = (nameEl.innerText || "").trim().toLowerCase();
                                                 if (leadName !== "there" && nameText && (nameText.includes(leadName) || leadFull.includes(nameText))) return false;
                                             }
                                             
-                                            const imgEl = group.querySelector('.msg-s-message-group__profile-link img');
+                                            const imgEl = searchContainer.querySelector('.msg-s-message-group__profile-link img');
                                             if (imgEl) {
                                                 const altText = (imgEl.alt || "").toLowerCase();
                                                 if (leadName !== "there" && altText.includes(leadName)) return false;
@@ -648,7 +749,7 @@ def run_auto_reply_worker_sync(account_id="default", api_key=None):
                                             const receipt = el.querySelector('.msg-s-event-listitem__seen-receipt, li-icon[type^="status-"], li-icon[type="check"]');
                                             if (receipt) return true;
                                             
-                                            return true; // Default to us
+                                            return false; // Default to lead
                                         }""", {"leadName": current_lead_name, "leadFull": lead_full_name})
                                     except: pass
                                     

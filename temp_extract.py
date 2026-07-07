@@ -54,9 +54,13 @@ def extract_connections_worker(account_id):
             # Extract currently visible connections
             current_batch = page.evaluate("""() => {
                 const resultsMap = new Map();
-                const links = document.querySelectorAll('a');
-                for (const linkEl of links) {
-                    if (!linkEl.href || !linkEl.href.includes('/in/')) continue;
+                    const links = document.querySelectorAll('a');
+                    for (const linkEl of links) {
+                        if (!linkEl.href || !linkEl.href.includes('/in/')) continue;
+                        
+                        if (linkEl.closest('.discover-person-card')) continue;
+                        const card = linkEl.closest('.artdeco-card');
+                        if (card && (card.innerText || '').includes('More profiles')) continue;
                     
                     let href = linkEl.href.split('?')[0];
                     if (href.endsWith('/')) href = href.slice(0, -1);
@@ -152,6 +156,21 @@ def extract_connections_worker(account_id):
             writer = csv.writer(f)
             writer.writerow(["Username", "Name", "Company", "Email", "Phone", "Profile URL"])
             
+            # Load ALL databases to prevent cross-account duplicates
+            from automation import load_accounts_registry
+            all_accounts = load_accounts_registry()
+            global_prospects_urls = set()
+            
+            for acc in all_accounts:
+                temp_db = load_db(acc.get("id"), "prospects")
+                for c in temp_db:
+                    if c.get("profile_url"):
+                        # Normalize URL for comparison
+                        url = c.get("profile_url", "").strip().lower()
+                        if url.endswith("/"): url = url[:-1]
+                        global_prospects_urls.add(url)
+                        
+            # Also load the current account's DB to append to it later
             prospects_db = load_db(account_id, "prospects")
             
             for i, conn in enumerate(connections):
@@ -164,14 +183,14 @@ def extract_connections_worker(account_id):
                 company = conn['company']
                 profile_url = f"https://www.linkedin.com/in/{username}/"
                 
-                already_exists = False
-                for c in prospects_db:
-                    if c.get("profile_url", "").strip() == profile_url:
-                        already_exists = True
-                        break
-                        
+                # Normalize URL for checking
+                check_url = profile_url.strip().lower()
+                if check_url.endswith("/"): check_url = check_url[:-1]
+                
+                already_exists = check_url in global_prospects_urls
+                
                 if already_exists:
-                    acc_state.add_log(f"[{i+1}/{total}] Skipping {name} - already exists in Lead Database.", "info")
+                    acc_state.add_log(f"[{i+1}/{total}] Skipping {name} - already exists in global Lead Database.", "info")
                     continue
                 
                 acc_state.add_log(f"[{i+1}/{total}] Fetching contact info for {name}...", "info")
@@ -179,10 +198,17 @@ def extract_connections_worker(account_id):
                 try:
                     # scrape_contact_info returns (email, phone, conn_date, dob)
                     from automation import scrape_contact_info
-                    email, phone, conn_date, dob = scrape_contact_info(page, username, account_id)
+                    email, phone, conn_date, dob, new_company = scrape_contact_info(page, username, account_id)
+                    
+                    if new_company:
+                        company = new_company
                 except Exception as e:
                     acc_state.add_log(f"Failed to scrape {username}: {str(e)}", "error")
-                    email, phone, conn_date, dob = "", "", None, None
+                    email, phone, conn_date, dob, company = "", "", None, None, None
+                    if acc_state.stop_requested or "closed" in str(e).lower():
+                        acc_state.add_log("Browser or page was manually closed. Stopping automation.", "warning")
+                        acc_state.stop_requested = True
+                        break
                     
                 email = email if email else ""
                 phone = phone if phone else ""
