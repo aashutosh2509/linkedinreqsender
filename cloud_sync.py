@@ -27,12 +27,27 @@ def sync_worker():
                     
                     # Get local contact database
                     databases[acc_id] = automation.load_db(acc_id)
+            
+            # Get chats
+            chats = {}
+            import os
+            DATA_DIR = "C:\\data" if os.name == 'nt' and os.path.exists("C:\\data") else "/data"
+            if os.path.exists(DATA_DIR):
+                for filename in os.listdir(DATA_DIR):
+                    if filename.startswith("chats_") and filename.endswith(".json"):
+                        acc_id = filename[len("chats_"):-len(".json")]
+                        try:
+                            with open(os.path.join(DATA_DIR, filename), "r", encoding="utf-8") as f:
+                                chats[acc_id] = json.load(f)
+                        except:
+                            pass
                     
             payload = {
                 "secret_key": SECRET_KEY,
                 "accounts": accounts,
                 "account_states": account_states,
-                "databases": databases
+                "databases": databases,
+                "chats": chats
             }
             
             data = json.dumps(payload).encode('utf-8')

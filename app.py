@@ -1211,6 +1211,20 @@ def cloud_sync_receive():
             for acc_id, db_data in req_data["databases"].items():
                 save_db(db_data, acc_id)
                 
+        # 2.5 Update chats
+        if "chats" in req_data:
+            import os
+            import json
+            DATA_DIR = "C:\\data" if os.name == 'nt' and os.path.exists("C:\\data") else "/data"
+            os.makedirs(DATA_DIR, exist_ok=True)
+            for acc_id, chat_data in req_data["chats"].items():
+                chats_file = os.path.join(DATA_DIR, f"chats_{acc_id}.json")
+                try:
+                    with open(chats_file, "w", encoding="utf-8") as f:
+                        json.dump(chat_data, f, indent=4)
+                except Exception as e:
+                    pass
+                
         # 3. Update in-memory live states so the dashboard UI catches it instantly
         if "account_states" in req_data:
             for acc_id, state_dict in req_data["account_states"].items():
