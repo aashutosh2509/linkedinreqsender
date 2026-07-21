@@ -1,7 +1,7 @@
 import os
 import json
 import re
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, session, redirect
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import openpyxl
@@ -82,6 +82,32 @@ _sync_history = []
 
 app = Flask(__name__, static_folder="public")
 CORS(app)
+
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super_secret_default_key_2026")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+
+@app.before_request
+def check_auth():
+    path = request.path
+    if path == "/" or path.endswith(".html"):
+        if path == "/login.html":
+            return
+        if not session.get("authenticated"):
+            return redirect("/login.html")
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    req_data = request.json or {}
+    password = req_data.get("password", "")
+    if password == ADMIN_PASSWORD:
+        session["authenticated"] = True
+        return jsonify({"status": "success"})
+    return err_response("Invalid password", 401)
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    session.pop("authenticated", None)
+    return jsonify({"status": "success"})
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
