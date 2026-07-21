@@ -81,7 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="chat-header-info">
                     <h3>${displayName} <span class="workspace-badge" style="font-size: 12px; background: var(--glow-purple); color: var(--accent-purple); padding: 3px 8px; border-radius: 6px; margin-left: 8px; vertical-align: middle; font-weight: 500;">Workspace: ${chat.account_name || 'Unknown'}</span></h3>
                     ${displayHeadline}
-                    <a href="${chat.thread_url}" target="_blank" class="linkedin-link"><i class="fa-brands fa-linkedin"></i> View on LinkedIn</a>
+                    <a href="${chat.profile_url || chat.thread_url}" target="_blank" class="linkedin-link"><i class="fa-brands fa-linkedin"></i> View on LinkedIn</a>
                 </div>
             </div>
             <div class="chat-messages" id="chatMessages">

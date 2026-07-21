@@ -945,18 +945,19 @@ def start_automation():
 
 @app.route("/api/start-messaging", methods=["POST"])
 def start_messaging():
-    data = request.json or {}
-    account_id = data.get("account_id", "default")
-    config = {
-        "template": data.get("template", ""),
-        "delay_min": int(data.get("delay_min", 30)),
-        "delay_max": int(data.get("delay_max", 70))
-    }
-    db_type = data.get("db_type", "prospects")
-    res = start_messaging_worker(account_id=account_id, config=config, db_type=db_type)
+    req_data = request.json or {}
+    acc_id = req_data.get("account_id", "default")
+    config = req_data.get("config", {})
+    db_type = req_data.get("db_type", "prospects")
+    
+    acc_state = get_account_state(acc_id)
+    if acc_state.get_state()["is_running"]:
+        return err_response("Another task is already running for this account.")
+        
+    res = start_messaging_worker(account_id=acc_id, config=config, db_type=db_type)
     if res.get("status") == "error":
-        return jsonify({"status": "error", "error": res.get("error")}), 400
-    return jsonify({"status": "success", "message": "Messaging sequence task added to queue."})
+        return err_response(res.get("error"))
+    return jsonify(res)
 
 @app.route("/api/stop", methods=["POST"])
 def stop_automation():
@@ -1340,8 +1341,8 @@ def get_chats():
                             chat_data["account_id"] = account_id
                             chat_data["account_name"] = account_name
                             
-                            # If full name or headline is missing, pull it from prospects.db!
-                            if not chat_data.get("full_name") or not chat_data.get("headline"):
+                            # If full name, headline, or profile_url is missing, pull it from prospects.db!
+                            if not chat_data.get("full_name") or not chat_data.get("headline") or not chat_data.get("profile_url"):
                                 lead_name = chat_data.get("lead_name", "").lower()
                                 matched = next((p for p in prospects if p.get("first_name", "").lower() == lead_name or p.get("name", "").lower().startswith(lead_name)), None)
                                 
@@ -1357,6 +1358,8 @@ def get_chats():
                                             chat_data["headline"] = title
                                         elif company:
                                             chat_data["headline"] = company
+                                    if not chat_data.get("profile_url"):
+                                        chat_data["profile_url"] = matched.get("profile_url")
                                             
                         all_chats.update(account_chats)
                 except Exception as e:
@@ -1421,6 +1424,8 @@ def get_notifications():
     
     notifications.sort(key=lambda x: x["days_until"])
     return jsonify(notifications)
+
+
 if __name__ == "__main__":
     # Create empty database structures if not present and reset stale statuses
     accounts = load_accounts_registry()
