@@ -415,7 +415,15 @@ def send_followup_message(page, message_text, acc_state, contact_name=""):
         # CRITICAL SAFETY CHECK: Verify the chat bubble belongs to the intended person
         try:
             bubble = message_box.locator("xpath=ancestor::*[contains(@class, 'msg-overlay-conversation-bubble')]").first
-            bubble_text = bubble.inner_text(timeout=2000).lower()
+            
+            # Look for the header text containing the person's name (usually the first h2 or strong element)
+            header_name = bubble.locator("h2, .msg-overlay-bubble-header__title, .msg-overlay-bubble-header__details").first
+            if header_name.is_visible():
+                bubble_text = header_name.inner_text(timeout=2000).lower()
+            else:
+                # Fallback to the first line of the bubble if specific headers aren't found
+                bubble_text = bubble.inner_text(timeout=2000).split('\n')[0].lower()
+                
             if contact_name:
                 first_name = contact_name.split()[0].lower()
                 # Bypass abort if it's a generic new message bubble or matches name
@@ -541,6 +549,8 @@ def resolve_template(template, contact, sender_name=""):
         "{FirstName}": first_name or full_name or "there",
         "{LastName}": last_name or "",
         "{FullName}": full_name or "there",
+        "[Name]": first_name or full_name or "there",
+        "{Name}": first_name or full_name or "there",
         "{Company}": contact.get("company", "") or "your company",
         "{Title}": contact.get("title", "") or "your role",
         "{SenderName}": sender_name
@@ -630,22 +640,69 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
         )
     except Exception as e:
         acc_state.add_log(f"Browser launch failed: {str(e)}. Attempting to unlock profile cache...", "warning")
+        
+        # Cross-platform cleanup of zombie chrome processes for this specific profile
+        import subprocess
+        import platform
+        import time
+        
+        system = platform.system().lower()
+        if system == "windows":
+            try:
+                cmd = 'wmic process where "name=\'chrome.exe\'" get processid,commandline /format:list'
+                output = subprocess.check_output(cmd, shell=True, text=True, errors='ignore')
+                for block in output.split("\n\n"):
+                    if user_data_dir in block or user_data_dir.replace("\\", "\\\\") in block:
+                        for line in block.split('\n'):
+                            if line.startswith("ProcessId="):
+                                pid = line.split("=")[1].strip()
+                                acc_state.add_log(f"Closing orphaned Chrome process (PID: {pid}) locking the profile...", "info")
+                                subprocess.run(["taskkill", "/PID", pid], capture_output=True)
+            except Exception as wmic_err:
+                acc_state.add_log(f"Could not scan/kill zombie Chrome processes: {wmic_err}", "warning")
+        else:
+            try:
+                cmd = ["pgrep", "-f", user_data_dir]
+                output = subprocess.check_output(cmd, text=True, errors='ignore')
+                for pid in output.strip().split('\n'):
+                    if pid:
+                        acc_state.add_log(f"Closing orphaned Chrome process (PID: {pid}) locking the profile...", "info")
+                        subprocess.run(["kill", "-15", pid])
+            except Exception:
+                pass
+                
+        time.sleep(2) # Give processes time to exit gracefully
+        
         lock_path = os.path.join(user_data_dir, "SingletonLock")
         if os.path.exists(lock_path):
             try:
                 os.remove(lock_path)
             except:
                 pass
+                
+        for lock_file in ["SingletonCookie", "SingletonSocket", "lockfile"]:
+            p = os.path.join(user_data_dir, lock_file)
+            if os.path.exists(p):
+                try: os.remove(p)
+                except: pass
+
         # Try launching again after unlocking the cache
-        context = pw.chromium.launch_persistent_context(
-            user_data_dir=user_data_dir,
-            executable_path=executable_path,
-            headless=False,
-            viewport={"width": 1280, "height": 800},
-            proxy=pw_proxy,
-            ignore_default_args=["--enable-automation"],
-            args=base_args
-        )
+        try:
+            context = pw.chromium.launch_persistent_context(
+                user_data_dir=user_data_dir,
+                executable_path=executable_path,
+                headless=False,
+                viewport={"width": 1280, "height": 800},
+                proxy=pw_proxy,
+                ignore_default_args=["--enable-automation"],
+                args=base_args
+            )
+        except Exception as retry_err:
+            acc_state.add_log(f"Second launch attempt failed: {str(retry_err)}", "error")
+            acc_state.add_log("A Chrome process might be stuck in the background holding the profile lock.", "error")
+            if system == "windows":
+                acc_state.add_log("Please run 'taskkill /F /IM chrome.exe' in your terminal or use Task Manager to close all Google Chrome processes, then try again.", "warning")
+            raise Exception("Browser locked by an existing process. Please close all Chrome instances.") from retry_err
         
     context.set_default_timeout(20000)
     
@@ -1022,7 +1079,10 @@ def open_linkedin_for_login(account_id="default"):
             playwright, context = launch_browser(account_id, headed=True, proxy_config=proxy_cfg)
             page = context.new_page()
             acc_state.add_log("Opening LinkedIn login page. Please log in manually if needed...", "info")
-            page.goto("https://www.linkedin.com/login")
+            try:
+                page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded", timeout=60000)
+            except Exception as e:
+                acc_state.add_log(f"Warning during initial page load: {str(e)}", "warning")
             
             # Wait until user is on feed page or closes browser
             logged_in = False
@@ -1180,7 +1240,7 @@ def scrape_contact_info(page, username, account_id="default"):
                             // Also check raw text nodes for email-like strings
                             const childTxts = Array.from(cur.childNodes).map(n => (n.textContent || '').trim());
                             for (const t of childTxts) {
-                                const emailMatch = t.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/);
+                                const emailMatch = t.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\\.[a-zA-Z0-9_-]+)/);
                                 if (emailMatch) return emailMatch[1];
                             }
                             cur = cur.parentElement;
@@ -1654,12 +1714,12 @@ def sync_acceptance_task_sync(account_id="default", db_type="prospects"):
             in_links = page.evaluate("Array.from(document.querySelectorAll('a')).map(a => a.href).filter(h => h && h.includes('/in/'))")
             current_count = len(in_links)
             
-            withdraw_anchors = page.locator("a:has-text('Withdraw')").all()
-            if not withdraw_anchors:
-                acc_state.add_log("No Withdraw links visible or list is empty. Ending scroll loop.", "info")
+            withdraw_elements = page.locator("button:has-text('Withdraw'), a:has-text('Withdraw')").all()
+            if not withdraw_elements:
+                acc_state.add_log("No Withdraw buttons visible or list is empty. Ending scroll loop.", "info")
                 break
                 
-            last_anchor = withdraw_anchors[-1]
+            last_anchor = withdraw_elements[-1]
             try:
                 last_anchor.scroll_into_view_if_needed(timeout=4000)
             except Exception as scroll_ex:
@@ -1690,7 +1750,7 @@ def sync_acceptance_task_sync(account_id="default", db_type="prospects"):
             except Exception:
                 continue
 
-        withdraw_count = len(page.locator("a:has-text('Withdraw')").all())
+        withdraw_count = len(page.locator("button:has-text('Withdraw'), a:has-text('Withdraw')").all())
         empty_state_visible = False
         empty_selectors = [
             ".mn-invitation-manager__no-invitations",
@@ -2794,6 +2854,35 @@ def background_scheduler_loop():
                                 # Mark as run today
                                 sched["last_run"] = today_str
                                 dirty = True
+
+                custom_sched = acc_config.get("custom_msg_schedule")
+                if custom_sched and custom_sched.get("enabled", False):
+                    time_sched = custom_sched.get("time", "10:00").strip()
+                    days = custom_sched.get("days")
+                    if not days:
+                        days = [0, 1, 2, 3, 4, 5, 6]
+                    last_run = custom_sched.get("last_run")
+
+                    if current_time_str == time_sched and (current_day in days or str(current_day) in days):
+                        if last_run != today_str:
+                            acc_state = get_account_state(acc_id)
+                            # Use queue to avoid running both connection sender and custom messaging simultaneously
+                            acc_state.add_log(f"[SCHEDULER] Queueing scheduled Custom Messaging for '{acc.get('name')}'...", "info")
+                            
+                            # Build the payload exactly like start-messaging
+                            payload_config = {
+                                "message_template": acc_config.get("message_template", ""),
+                                "custom_msg_start_index": acc_config.get("custom_msg_start_index"),
+                                "custom_msg_end_index": acc_config.get("custom_msg_end_index"),
+                                "custom_msg_delay_min": acc_config.get("custom_msg_delay_min", 30),
+                                "custom_msg_delay_max": acc_config.get("custom_msg_delay_max", 60)
+                            }
+                            
+                            queue_runner.add_to_queue("messaging", acc_id, lambda _acc_id=acc_id, _cfg=payload_config: run_messaging_worker_sync(_acc_id, _cfg, "prospects"))
+                            
+                            # Mark as run today
+                            custom_sched["last_run"] = today_str
+                            dirty = True
             if dirty:
                 save_accounts_registry(accounts)
         except Exception as e:
@@ -2804,6 +2893,8 @@ def background_scheduler_loop():
 threading.Thread(target=background_scheduler_loop, daemon=True).start()
 
 def run_messaging_worker_sync(account_id="default", config=None, db_type="prospects"):
+    if config is None:
+        config = {}
     from datetime import datetime
     import random
     import time
@@ -2812,13 +2903,16 @@ def run_messaging_worker_sync(account_id="default", config=None, db_type="prospe
     update_account_status_in_registry(account_id, status="Running", current_action="Starting messaging sequence...", progress_percent=5)
     acc_state.add_log("Starting LinkedIn Messaging Sequence...", "info")
     
+    # DEBUG LOGGING FOR CONFIG
+    acc_state.add_log(f"DEBUG: config received by worker = {config}", "info")
+    
     if not config:
         config = {}
-    delay_min = int(config.get("delay_min", 30))
-    delay_max = int(config.get("delay_max", 60))
+    delay_min = int(config.get("custom_msg_delay_min", 30))
+    delay_max = int(config.get("custom_msg_delay_max", 60))
     
-    start_index = config.get("start_index")
-    end_index = config.get("end_index")
+    start_index = config.get("custom_msg_start_index")
+    end_index = config.get("custom_msg_end_index")
     try: start_index = int(start_index) if start_index is not None else None
     except: start_index = None
     try: end_index = int(end_index) if end_index is not None else None
@@ -2826,26 +2920,33 @@ def run_messaging_worker_sync(account_id="default", config=None, db_type="prospe
 
     db_data = load_db(account_id, db_type)
     
-    # Filter by range if provided
+    # 1. Create a list that matches exactly what the frontend "Leads CRM" table shows
+    ui_list = []
+    for c in db_data:
+        if c.get("status") in ["Connected", "Extracted"]:
+            ui_list.append(c)
+            
+    # 2. Apply the user's range slice to this UI-matching list
     if start_index is not None or end_index is not None:
         s_idx = start_index if start_index is not None else 1
-        e_idx = end_index if end_index is not None else len(db_data)
+        e_idx = end_index if end_index is not None else len(ui_list)
         s_idx = max(1, s_idx)
-        e_idx = min(len(db_data), e_idx)
+        e_idx = min(len(ui_list), e_idx)
         if s_idx <= e_idx:
-            db_data_slice = db_data[s_idx - 1 : e_idx]
-            acc_state.add_log(f"Range filter active: targeting profiles from Sr. No. {s_idx} to {e_idx}.", "info")
+            sliced_ui_list = ui_list[s_idx - 1 : e_idx]
+            acc_state.add_log(f"Range filter active: targeting rows {s_idx} to {e_idx} from the Leads CRM table.", "info")
         else:
-            db_data_slice = db_data
-            acc_state.add_log(f"Invalid range. Processing full list.", "warning")
+            sliced_ui_list = ui_list
+            acc_state.add_log(f"Invalid range. Processing full table.", "warning")
     else:
-        db_data_slice = db_data
+        sliced_ui_list = ui_list
+        acc_state.add_log(f"No range selected. Processing all {len(ui_list)} connected profiles.", "info")
     
-    # Filter for connected users and deduplicate by URL to prevent messaging the same person twice
+    # 3. Filter for connected users and deduplicate by URL to prevent messaging the same person twice
     unique_urls = set()
     contacts_to_message = []
-    for c in db_data_slice:
-        if c.get("status") == "Connected" and not c.get("message_sent"):
+    for c in sliced_ui_list:
+        if c.get("status") in ["Connected", "Extracted"]:
             raw_url = c.get("profile_url", "").strip().lower()
             # Normalize URL (remove www., trailing slashes, etc.)
             norm_url = raw_url.replace("www.", "").replace("http://", "https://").rstrip('/')
@@ -2854,13 +2955,13 @@ def run_messaging_worker_sync(account_id="default", config=None, db_type="prospe
                 contacts_to_message.append(c)
     
     if not contacts_to_message:
-        acc_state.add_log("No contacts found with status 'Connected' that haven't been messaged.", "warning")
+        acc_state.add_log("No contacts found with status 'Connected' or 'Extracted'.", "warning")
         acc_state.update_status(action="Idle", progress=100)
         update_account_status_in_registry(account_id, status="Idle", current_action="Idle", progress_percent=100)
         acc_state.stop_running()
         return
         
-    acc_state.add_log(f"Found {len(contacts_to_message)} connected profiles to message.", "info")
+    acc_state.add_log(f"Found {len(contacts_to_message)} profiles to message.", "info")
     
     proxy_cfg = None
     accounts = load_accounts_registry()
@@ -2896,7 +2997,11 @@ def run_messaging_worker_sync(account_id="default", config=None, db_type="prospe
             page.goto(profile_url, wait_until="domcontentloaded", timeout=30000)
             time.sleep(random.uniform(3, 5))
             
-            template_chosen = random.choice(SPINTAX_TEMPLATES)
+            template_chosen = config.get("message_template")
+            if not template_chosen:
+                acc_state.add_log("No custom template provided! Aborting message to prevent sending blank/spintax messages.", "error")
+                continue
+                
             msg = resolve_template(template_chosen, contact, next((a.get('name').split()[0] for a in load_accounts_registry() if a['id'] == account_id), account_id))
             if send_followup_message(page, msg, acc_state, contact.get('name', '')):
                 acc_state.add_log(f"Message sent to {contact.get('name')}!", "success")
@@ -2921,6 +3026,8 @@ def run_messaging_worker_sync(account_id="default", config=None, db_type="prospe
             acc_state.add_log(f"Error messaging {contact.get('name')}: {str(e)}", "warning")
             
         if idx < len(contacts_to_message) - 1 and not acc_state.stop_requested:
+            delay_min = config.get("delay_min", 30)
+            delay_max = config.get("delay_max", 60)
             delay = random.randint(delay_min, delay_max)
             acc_state.add_log(f"Waiting {delay} seconds before next message...", "info")
             time.sleep(delay)

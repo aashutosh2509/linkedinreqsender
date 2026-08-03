@@ -161,10 +161,8 @@
 
                 if (response.ok) {
                     errorBox.style.display = 'none';
-                    // Check if there is a redirect parameter (optional, currently it will just go to index.html or admin)
-                    // If they tried to access a specific page before being redirected, the browser might have it in referer
-                    // Alternatively, we can just redirect to admin_dashboard.html by default
-                    window.location.href = '/admin_dashboard.html';
+                    // Redirect to the main user dashboard (index.html)
+                    window.location.href = '/';
                 } else {
                     const data = await response.json();
                     errorBox.textContent = data.error || 'Invalid password.';

@@ -458,6 +458,32 @@ def update_account_config():
             }
         else:
             acc_config["extract_schedule"] = None
+
+    if "message_template" in config:
+        acc_config["message_template"] = config["message_template"]
+        
+    if "custom_msg_start_index" in config:
+        val = config["custom_msg_start_index"]
+        acc_config["custom_msg_start_index"] = int(val) if val is not None and str(val).strip() != "" else None
+    if "custom_msg_end_index" in config:
+        val = config["custom_msg_end_index"]
+        acc_config["custom_msg_end_index"] = int(val) if val is not None and str(val).strip() != "" else None
+    if "custom_msg_delay_min" in config:
+        acc_config["custom_msg_delay_min"] = int(config["custom_msg_delay_min"])
+    if "custom_msg_delay_max" in config:
+        acc_config["custom_msg_delay_max"] = int(config["custom_msg_delay_max"])
+        
+    if "custom_msg_schedule" in config:
+        csched = config["custom_msg_schedule"]
+        if csched:
+            acc_config["custom_msg_schedule"] = {
+                "enabled": bool(csched.get("enabled", False)),
+                "time": str(csched.get("time", "10:00")).strip(),
+                "days": [int(d) for d in csched.get("days", [])],
+                "last_run": csched.get("last_run")
+            }
+        else:
+            acc_config["custom_msg_schedule"] = None
         
     if "proxy" in req_data:
         px = req_data["proxy"]

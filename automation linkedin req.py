@@ -208,17 +208,82 @@ def launch_browser(account_id="default", headed=True, proxy_config=None):
                 pw_proxy["password"] = proxy_config["password"].strip()
             acc_state.add_log(f"Routing browser through proxy server: {srv}", "info")
             
-    context = playwright.chromium.launch_persistent_context(
-        user_data_dir=user_data_dir,
-        headless=not headed,
-        viewport={"width": 1280, "height": 800},
-        proxy=pw_proxy,
-        channel="chrome",
-        args=[
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox"
-        ]
-    )
+    try:
+        context = playwright.chromium.launch_persistent_context(
+            user_data_dir=user_data_dir,
+            headless=not headed,
+            viewport={"width": 1280, "height": 800},
+            proxy=pw_proxy,
+            channel="chrome",
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox"
+            ]
+        )
+    except Exception as e:
+        acc_state.add_log(f"Browser launch failed: {str(e)}. Attempting to unlock profile cache...", "warning")
+        
+        # Cross-platform cleanup of zombie chrome processes for this specific profile
+        import subprocess
+        import platform
+        import time
+        
+        system = platform.system().lower()
+        if system == "windows":
+            try:
+                cmd = 'wmic process where "name=\'chrome.exe\'" get processid,commandline /format:list'
+                output = subprocess.check_output(cmd, shell=True, text=True, errors='ignore')
+                for block in output.split("\n\n"):
+                    if user_data_dir in block or user_data_dir.replace("\\", "\\\\") in block:
+                        for line in block.split('\n'):
+                            if line.startswith("ProcessId="):
+                                pid = line.split("=")[1].strip()
+                                acc_state.add_log(f"Closing orphaned Chrome process (PID: {pid}) locking the profile...", "info")
+                                subprocess.run(["taskkill", "/PID", pid], capture_output=True)
+            except Exception as wmic_err:
+                acc_state.add_log(f"Could not scan/kill zombie Chrome processes: {wmic_err}", "warning")
+        else:
+            try:
+                cmd = ["pgrep", "-f", user_data_dir]
+                output = subprocess.check_output(cmd, text=True, errors='ignore')
+                for pid in output.strip().split('\n'):
+                    if pid:
+                        acc_state.add_log(f"Closing orphaned Chrome process (PID: {pid}) locking the profile...", "info")
+                        subprocess.run(["kill", "-15", pid])
+            except Exception:
+                pass
+                
+        time.sleep(2) # Give processes time to exit gracefully
+        
+        lock_path = os.path.join(user_data_dir, "SingletonLock")
+        if os.path.exists(lock_path):
+            try: os.remove(lock_path)
+            except: pass
+                
+        for lock_file in ["SingletonCookie", "SingletonSocket", "lockfile"]:
+            p = os.path.join(user_data_dir, lock_file)
+            if os.path.exists(p):
+                try: os.remove(p)
+                except: pass
+
+        try:
+            context = playwright.chromium.launch_persistent_context(
+                user_data_dir=user_data_dir,
+                headless=not headed,
+                viewport={"width": 1280, "height": 800},
+                proxy=pw_proxy,
+                channel="chrome",
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--no-sandbox"
+                ]
+            )
+        except Exception as retry_err:
+            acc_state.add_log(f"Second launch attempt failed: {str(retry_err)}", "error")
+            acc_state.add_log("A Chrome process might be stuck in the background holding the profile lock.", "error")
+            if system == "windows":
+                acc_state.add_log("Please run 'taskkill /F /IM chrome.exe' in your terminal or use Task Manager to close all Google Chrome processes, then try again.", "warning")
+            raise Exception("Browser locked by an existing process. Please close all Chrome instances.") from retry_err
     
     context.set_default_timeout(20000)
     return playwright, context
