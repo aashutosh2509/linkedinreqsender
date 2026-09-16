@@ -1288,6 +1288,20 @@ def cloud_sync_receive():
                 except Exception as e:
                     pass
                 
+        # 2.6 Update starred chats
+        if "starred_chats" in req_data:
+            import os
+            import json
+            from automation import ACCOUNTS_DB_PATH
+            DATA_DIR = os.path.dirname(ACCOUNTS_DB_PATH)
+            os.makedirs(DATA_DIR, exist_ok=True)
+            starred_file = os.path.join(DATA_DIR, "starred_chats.json")
+            try:
+                with open(starred_file, "w", encoding="utf-8") as f:
+                    json.dump(req_data["starred_chats"], f, indent=2)
+            except Exception as e:
+                pass
+
         # 3. Update in-memory live states so the dashboard UI catches it instantly
         if "account_states" in req_data:
             for acc_id, state_dict in req_data["account_states"].items():
@@ -1473,6 +1487,36 @@ def toggle_star_chat():
         print(f"Error saving starred chats: {e}")
         
     return jsonify({"success": True, "starred": is_starred, "thread_url": thread_url})
+
+@app.route("/api/chats/sync-stars", methods=["POST"])
+def sync_stars():
+    import json
+    import os
+    from automation import ACCOUNTS_DB_PATH
+    DATA_DIR = os.path.dirname(ACCOUNTS_DB_PATH)
+    data = request.get_json() or {}
+    threads = data.get("starred_threads", [])
+    if not isinstance(threads, list):
+        return jsonify({"error": "starred_threads list required"}), 400
+    
+    starred_file = os.path.join(DATA_DIR, "starred_chats.json")
+    existing = set()
+    if os.path.exists(starred_file):
+        try:
+            with open(starred_file, "r", encoding="utf-8") as f:
+                existing = set(json.load(f))
+        except:
+            pass
+    
+    updated = list(existing.union(set(threads)))
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(starred_file, "w", encoding="utf-8") as f:
+            json.dump(updated, f, indent=2)
+    except Exception as e:
+        print(f"Error saving synced stars: {e}")
+        
+    return jsonify({"success": True, "count": len(updated)})
 
 @app.route("/api/notifications", methods=["GET"])
 def get_notifications():

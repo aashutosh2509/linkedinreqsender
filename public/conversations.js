@@ -52,6 +52,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             });
             saveStarredThreads();
+
+            // Push our merged starred threads to backend so backend and cloud sync know about all starred chats
+            if (starredThreads.size > 0) {
+                fetch('/api/chats/sync-stars', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ starred_threads: Array.from(starredThreads) })
+                }).catch(() => {});
+            }
+
             renderChatList();
         })
         .catch(err => {

@@ -43,12 +43,23 @@ def sync_worker():
                         except:
                             pass
                     
+            # Get starred chats
+            starred_chats = []
+            starred_file = os.path.join(DATA_DIR, "starred_chats.json")
+            if os.path.exists(starred_file):
+                try:
+                    with open(starred_file, "r", encoding="utf-8") as f:
+                        starred_chats = json.load(f)
+                except:
+                    pass
+
             payload = {
                 "secret_key": SECRET_KEY,
                 "accounts": accounts,
                 "account_states": account_states,
                 "databases": databases,
-                "chats": chats
+                "chats": chats,
+                "starred_chats": starred_chats
             }
             
             data = json.dumps(payload).encode('utf-8')
