@@ -106,6 +106,37 @@ async function fetchAccounts() {
                     
                     btnSaveSchedule.disabled = true;
                 }
+
+                // Populate Custom Msg Scheduler UI
+                if (typeof customMsgSchedulerEnabled !== 'undefined' && customMsgSchedulerEnabled) {
+                    const cfg = acc.config || {};
+                    const sched = cfg.custom_msg_schedule || {};
+                    const isEnabled = sched.enabled || false;
+                    
+                    customMsgSchedulerEnabled.checked = isEnabled;
+                    if (customMsgSchedulerConfig) customMsgSchedulerConfig.style.display = isEnabled ? "block" : "none";
+                    if (customMsgSchedulerTime) customMsgSchedulerTime.value = sched.time || "10:00";
+                    
+                    const activeDays = sched.days || [];
+                    if (typeof customMsgDayButtons !== 'undefined') {
+                        customMsgDayButtons.forEach(db => {
+                            const dayVal = parseInt(db.getAttribute("data-day"));
+                            if (activeDays.includes(dayVal)) db.classList.add("active");
+                            else db.classList.remove("active");
+                        });
+                    }
+                    
+                    // Populate existing custom message config
+                    if (document.getElementById("custom-msg-template") && cfg.message_template !== undefined) document.getElementById("custom-msg-template").value = cfg.message_template;
+                    if (document.getElementById("custom-msg-start") && cfg.custom_msg_start_index !== undefined) document.getElementById("custom-msg-start").value = cfg.custom_msg_start_index !== null ? cfg.custom_msg_start_index : "";
+                    if (document.getElementById("custom-msg-end") && cfg.custom_msg_end_index !== undefined) document.getElementById("custom-msg-end").value = cfg.custom_msg_end_index !== null ? cfg.custom_msg_end_index : "";
+                    if (document.getElementById("custom-msg-delay-min") && cfg.custom_msg_delay_min !== undefined) document.getElementById("custom-msg-delay-min").value = cfg.custom_msg_delay_min;
+                    if (document.getElementById("custom-msg-delay-max") && cfg.custom_msg_delay_max !== undefined) document.getElementById("custom-msg-delay-max").value = cfg.custom_msg_delay_max;
+
+                    if (typeof btnSaveCustomMsgSchedule !== 'undefined' && btnSaveCustomMsgSchedule) {
+                        btnSaveCustomMsgSchedule.disabled = true;
+                    }
+                }
             });
             
             sidebarAccountsList.appendChild(btn);
@@ -226,7 +257,7 @@ const schedulerEnabled = document.getElementById("scheduler-enabled");
 const schedulerConfig = document.getElementById("scheduler-config-container");
 const schedulerTime = document.getElementById("scheduler-time");
 const btnSaveSchedule = document.getElementById("btn-save-schedule");
-const dayButtons = document.querySelectorAll(".day-btn");
+const dayButtons = document.querySelectorAll(".day-btn:not(.day-btn-custom)");
 
 if (schedulerEnabled) {
     schedulerEnabled.addEventListener("change", () => {
@@ -245,6 +276,105 @@ dayButtons.forEach(btn => {
         btnSaveSchedule.disabled = false;
     });
 });
+
+// -------------------- CUSTOM MSG SCHEDULER LOGIC --------------------
+const customMsgSchedulerEnabled = document.getElementById("custom-msg-scheduler-enabled");
+const customMsgSchedulerConfig = document.getElementById("custom-msg-scheduler-config-container");
+const customMsgSchedulerTime = document.getElementById("custom-msg-scheduler-time");
+const btnSaveCustomMsgSchedule = document.getElementById("btn-save-custom-msg-schedule");
+const customMsgDayButtons = document.querySelectorAll(".day-btn-custom");
+
+if (customMsgSchedulerEnabled) {
+    customMsgSchedulerEnabled.addEventListener("change", () => {
+        customMsgSchedulerConfig.style.display = customMsgSchedulerEnabled.checked ? "block" : "none";
+        if (btnSaveCustomMsgSchedule) btnSaveCustomMsgSchedule.disabled = false;
+    });
+}
+if (customMsgSchedulerTime) {
+    customMsgSchedulerTime.addEventListener("change", () => {
+        if (btnSaveCustomMsgSchedule) btnSaveCustomMsgSchedule.disabled = false;
+    });
+}
+customMsgDayButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+        btn.classList.toggle("active");
+        if (btnSaveCustomMsgSchedule) btnSaveCustomMsgSchedule.disabled = false;
+    });
+});
+
+if (btnSaveCustomMsgSchedule) {
+    btnSaveCustomMsgSchedule.addEventListener("click", saveCustomMsgSchedule);
+}
+
+// Any change to template or delays should also enable the save schedule button
+["custom-msg-template", "custom-msg-start", "custom-msg-end", "custom-msg-delay-min", "custom-msg-delay-max"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener("input", () => {
+            if (btnSaveCustomMsgSchedule) btnSaveCustomMsgSchedule.disabled = false;
+        });
+    }
+});
+
+async function saveCustomMsgSchedule() {
+    if (!currentAccountId) return alert("Select an account first");
+    
+    const selectedDays = [];
+    customMsgDayButtons.forEach(btn => {
+        if (btn.classList.contains("active")) {
+            selectedDays.push(parseInt(btn.getAttribute("data-day")));
+        }
+    });
+
+    const payload = {
+        id: currentAccountId,
+        config: {
+            custom_msg_schedule: {
+                enabled: customMsgSchedulerEnabled.checked,
+                time: customMsgSchedulerTime.value,
+                days: selectedDays
+            },
+            message_template: document.getElementById("custom-msg-template") ? document.getElementById("custom-msg-template").value : "",
+            custom_msg_start_index: document.getElementById("custom-msg-start") ? document.getElementById("custom-msg-start").value : null,
+            custom_msg_end_index: document.getElementById("custom-msg-end") ? document.getElementById("custom-msg-end").value : null,
+            custom_msg_delay_min: document.getElementById("custom-msg-delay-min") ? document.getElementById("custom-msg-delay-min").value : 30,
+            custom_msg_delay_max: document.getElementById("custom-msg-delay-max") ? document.getElementById("custom-msg-delay-max").value : 60
+        }
+    };
+    
+    const originalContent = btnSaveCustomMsgSchedule.innerHTML;
+    btnSaveCustomMsgSchedule.disabled = true;
+    btnSaveCustomMsgSchedule.innerHTML = `<i data-lucide="loader" class="animate-spin" style="width:14px; height:14px; margin-right:6px; display:inline-block; vertical-align:middle;"></i> Saving...`;
+    lucide.createIcons();
+    
+    try {
+        const res = await fetch(`${API_BASE}/accounts/update-config`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+            btnSaveCustomMsgSchedule.innerHTML = `<i data-lucide="check" style="width:14px; height:14px; margin-right:6px;"></i> Saved`;
+            btnSaveCustomMsgSchedule.style.backgroundColor = "#22c55e";
+            await fetchAccounts(); // Refresh accounts registry to get latest config
+            setTimeout(() => {
+                btnSaveCustomMsgSchedule.disabled = true;
+                btnSaveCustomMsgSchedule.innerHTML = originalContent;
+                btnSaveCustomMsgSchedule.style.backgroundColor = "";
+                lucide.createIcons();
+            }, 2000);
+        } else {
+            alert("Failed to save: " + data.message);
+            btnSaveCustomMsgSchedule.innerHTML = originalContent;
+            btnSaveCustomMsgSchedule.disabled = false;
+        }
+    } catch (e) {
+        alert("Error saving schedule");
+        btnSaveCustomMsgSchedule.innerHTML = originalContent;
+        btnSaveCustomMsgSchedule.disabled = false;
+    }
+}
 
 async function saveWorkspaceSchedule() {
     if (!currentAccountId) return alert("Select an account first");
@@ -327,3 +457,76 @@ btnRefresh.addEventListener("click", fetchLeads);
 
 // Start
 document.addEventListener("DOMContentLoaded", init);
+
+// Custom Message Sender Logic
+async function startCustomMessaging() {
+    if (!currentAccountId) {
+        return alert("Please select an account from the sidebar first.");
+    }
+    
+    const template = document.getElementById("custom-msg-template").value.trim();
+    if (!template) {
+        return alert("Please provide a message template.");
+    }
+    
+    const startIdx = document.getElementById("custom-msg-start").value;
+    const endIdx = document.getElementById("custom-msg-end").value;
+    const delayMin = document.getElementById("custom-msg-delay-min").value;
+    const delayMax = document.getElementById("custom-msg-delay-max").value;
+    
+    if (!startIdx || !endIdx) {
+        if (!confirm("You haven't specified a full range. This will send the message to ALL connected profiles. Continue?")) return;
+    } else {
+        if (!confirm(`Start sending this custom message from Sr. No. ${startIdx} to ${endIdx}?`)) return;
+    }
+    
+    const btn = document.getElementById("btn-start-custom-messaging");
+    const originalContent = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="animate-spin"></i> Starting...';
+    lucide.createIcons();
+    
+    try {
+        const payload = {
+            account_id: currentAccountId,
+            config: {
+                message_template: template,
+                custom_msg_start_index: startIdx ? parseInt(startIdx) : null,
+                custom_msg_end_index: endIdx ? parseInt(endIdx) : null,
+                custom_msg_delay_min: delayMin ? parseInt(delayMin) : 30,
+                custom_msg_delay_max: delayMax ? parseInt(delayMax) : 60
+            }
+        };
+        
+        const res = await fetch(`${API_BASE}/start-messaging`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (data.status === "success") {
+            alert("Custom messaging sequence started successfully!");
+            btn.innerHTML = '<i data-lucide="check"></i> Started';
+            btn.style.background = "#22c55e";
+        } else {
+            throw new Error(data.error || "Failed to start messaging");
+        }
+        
+    } catch (e) {
+        alert("Error: " + e.message);
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+        lucide.createIcons();
+    }
+    
+    setTimeout(() => {
+        if (!btn.disabled || btn.style.background === "rgb(34, 197, 94)") {
+            btn.disabled = false;
+            btn.innerHTML = originalContent;
+            btn.style.background = "";
+            lucide.createIcons();
+        }
+    }, 3000);
+}

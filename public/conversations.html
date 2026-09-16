@@ -21,7 +21,8 @@
             <ul class="nav-links">
                 <li><a href="admin_dashboard.html"><i class="fa-solid fa-house"></i> Overview</a></li>
                 <li><a href="admin_dashboard.html#leads"><i class="fa-solid fa-users"></i> Leads</a></li>
-                <li class="active"><a href="conversations.html"><i class="fa-solid fa-comments"></i> Conversations</a></li>
+                <li id="navConversations" class="active"><a href="conversations.html"><i class="fa-solid fa-comments"></i> Conversations</a></li>
+                <li id="navStarred"><a href="conversations.html?filter=starred"><i class="fa-solid fa-star"></i> Starred Chats</a></li>
                 <li><a href="#"><i class="fa-solid fa-gear"></i> Settings</a></li>
             </ul>
             <div class="sidebar-footer" style="display: flex; justify-content: space-between; align-items: center;">
@@ -42,8 +43,16 @@
         <main class="main-content chat-layout">
             <div class="chat-sidebar">
                 <div class="chat-sidebar-header">
-                    <h2>Chats</h2>
-                    <div class="search-bar chat-search">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <h2 id="chatListHeading" style="margin-bottom: 0;">Chats</h2>
+                        <span id="chatCountBadge" class="chat-count-badge">0</span>
+                    </div>
+                    <!-- Quick Tabs: All Chats vs Starred -->
+                    <div class="chat-tabs">
+                        <button class="chat-tab-btn active" id="tabAllChats">All Chats</button>
+                        <button class="chat-tab-btn" id="tabStarredChats"><i class="fa-solid fa-star" style="color: #f59e0b;"></i> Starred Chats</button>
+                    </div>
+                    <div class="search-bar chat-search" style="margin-top: 12px;">
                         <i class="fa-solid fa-magnifying-glass"></i>
                         <input type="text" id="chatSearchInput" placeholder="Search conversations...">
                     </div>

@@ -1134,8 +1134,16 @@ def upload_file():
         contacts_added = 0
         skipped_duplicates = 0
         skipped_invalid = 0
+        def get_canonical_url_key(u):
+            if not u:
+                return ""
+            clean = str(u).strip().split('?')[0].rstrip('/')
+            clean = re.sub(r'https?://[a-z]{2,}\.linkedin\.com/in/', 'https://www.linkedin.com/in/', clean, flags=re.IGNORECASE)
+            clean = re.sub(r'https?://(www\.)?linkedin\.com/in/', 'https://www.linkedin.com/in/', clean, flags=re.IGNORECASE)
+            return clean.lower()
+
         existing_db = load_db(acc_id, db_type)
-        existing_urls = {c.get("profile_url", "").strip().split('?')[0].rstrip('/') for c in existing_db}
+        existing_urls = {get_canonical_url_key(c.get("profile_url")) for c in existing_db if c.get("profile_url")}
         
         new_contacts = []
         
@@ -1156,11 +1164,12 @@ def upload_file():
                     acc_state.add_log(f"Row {row_idx}: Skipped - invalid URL '{url}'", "warning")
                     continue
                     
-            norm_url = url.split('?')[0].rstrip('/')
-            if norm_url in existing_urls:
+            canonical_key = get_canonical_url_key(url)
+            if canonical_key in existing_urls:
                 acc_state.add_log(f"Row {row_idx}: Skipped - already in database: {url}", "info")
                 skipped_duplicates += 1
                 continue
+            existing_urls.add(canonical_key)
                 
             first_name = ""
             last_name = ""
@@ -1376,6 +1385,15 @@ def get_chats():
     accounts = load_accounts_registry()
     account_names = {acc.get("id"): acc.get("name") for acc in accounts}
     
+    starred_file = os.path.join(DATA_DIR, "starred_chats.json")
+    starred_list = set()
+    if os.path.exists(starred_file):
+        try:
+            with open(starred_file, "r", encoding="utf-8") as f:
+                starred_list = set(json.load(f))
+        except:
+            pass
+    
     if os.path.exists(DATA_DIR):
         for filename in os.listdir(DATA_DIR):
             if filename.startswith("chats_") and filename.endswith(".json"):
@@ -1392,6 +1410,7 @@ def get_chats():
                         for thread_url, chat_data in account_chats.items():
                             chat_data["account_id"] = account_id
                             chat_data["account_name"] = account_name
+                            chat_data["is_starred"] = thread_url in starred_list
                             
                             # If full name, headline, or profile_url is missing, pull it from prospects.db!
                             if not chat_data.get("full_name") or not chat_data.get("headline") or not chat_data.get("profile_url"):
@@ -1417,6 +1436,43 @@ def get_chats():
                 except Exception as e:
                     pass
     return jsonify(all_chats)
+
+@app.route("/api/chats/star", methods=["POST"])
+def toggle_star_chat():
+    import json
+    import os
+    from automation import ACCOUNTS_DB_PATH
+    DATA_DIR = os.path.dirname(ACCOUNTS_DB_PATH)
+    data = request.get_json() or {}
+    thread_url = data.get("thread_url")
+    is_starred = data.get("is_starred", True)
+    if not thread_url:
+        return jsonify({"error": "thread_url required"}), 400
+    
+    starred_file = os.path.join(DATA_DIR, "starred_chats.json")
+    starred_list = []
+    if os.path.exists(starred_file):
+        try:
+            with open(starred_file, "r", encoding="utf-8") as f:
+                starred_list = json.load(f)
+        except:
+            starred_list = []
+            
+    if is_starred:
+        if thread_url not in starred_list:
+            starred_list.append(thread_url)
+    else:
+        if thread_url in starred_list:
+            starred_list.remove(thread_url)
+    
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(starred_file, "w", encoding="utf-8") as f:
+            json.dump(starred_list, f, indent=2)
+    except Exception as e:
+        print(f"Error saving starred chats: {e}")
+        
+    return jsonify({"success": True, "starred": is_starred, "thread_url": thread_url})
 
 @app.route("/api/notifications", methods=["GET"])
 def get_notifications():

@@ -159,6 +159,86 @@
                 </div>
             </div>
 
+            <!-- RIGHT COLUMN WRAPPER -->
+            <div style="display: flex; flex-direction: column; gap: 24px; min-width: 0; width: 100%;">
+                
+            <!-- CUSTOM MESSAGE SENDER CARD -->
+            <div class="glass-card panel-card" id="custom-message-sender-card" style="margin-bottom: 24px; width: 100%;">
+                <div class="card-header">
+                    <div class="card-title-icon" style="background: linear-gradient(135deg, #10b981, #34d399);"><i data-lucide="send"></i></div>
+                    <h3>Custom Message Sender</h3>
+                </div>
+                <div class="card-body">
+                    <div class="form-group">
+                        <label for="custom-msg-template">Message Template</label>
+                        <textarea id="custom-msg-template" class="form-control" rows="6" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.8); resize: vertical;">Hi [Name], are low-nitrite excipients currently part of your nitrosamine risk-mitigation strategy?
+We have developed SANCEL® LN Microcrystalline Cellulose, with nitrite levels specified at below 0.0006 ppm on the CoA and independently tested by an USFDA-Accredited Laboratory.
+It is designed to help formulators reduce nitrosamine risk at the excipient-selection stage without compromising MCC performance.
+Would it be relevant for me to share the technical data?</textarea>
+                        <span class="input-hint margin-top-4">Use <code>[Name]</code> to insert the prospect's name automatically.</span>
+                    </div>
+                    
+                    <div style="display: flex; gap: 15px; margin-top: 15px;">
+                        <div class="form-group" style="flex: 1;">
+                            <label for="custom-msg-start">Start Sr. No.</label>
+                            <input type="number" id="custom-msg-start" class="form-control" placeholder="1" min="1" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label for="custom-msg-end">End Sr. No.</label>
+                            <input type="number" id="custom-msg-end" class="form-control" placeholder="10" min="1" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label for="custom-msg-delay-min">Delay Min (sec)</label>
+                            <input type="number" id="custom-msg-delay-min" class="form-control" value="30" min="10" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        </div>
+                        <div class="form-group" style="flex: 1;">
+                            <label for="custom-msg-delay-max">Delay Max (sec)</label>
+                            <input type="number" id="custom-msg-delay-max" class="form-control" value="60" min="10" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        </div>
+                    </div>
+                    
+                    <button id="btn-start-custom-messaging" class="btn btn-primary margin-top-16 btn-full-width" style="background: linear-gradient(135deg, #10b981, #059669); border: none;" onclick="startCustomMessaging()">
+                        <i data-lucide="play"></i> Start Custom Messaging
+                    </button>
+
+                    <!-- CUSTOM MSG SCHEDULER SETTINGS -->
+                    <div class="margin-top-24" style="border-top: 1px solid var(--border-color); padding-top: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h4 style="margin: 0; font-size: 14px; color: var(--text-color); font-weight: 600;">Enable Scheduler</h4>
+                            <label class="switch">
+                                <input type="checkbox" id="custom-msg-scheduler-enabled">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        
+                        <div id="custom-msg-scheduler-config-container" style="display: none; margin-top: 12px;">
+                            <div class="form-group">
+                                <label for="custom-msg-scheduler-time">Scheduled Time (HH:MM)</label>
+                                <input type="time" id="custom-msg-scheduler-time" value="10:00" class="time-input">
+                            </div>
+                            
+                            <div class="form-group margin-top-16">
+                                <label>Active Days</label>
+                                <div class="weekday-selector">
+                                    <button class="day-btn day-btn-custom" data-day="0">M</button>
+                                    <button class="day-btn day-btn-custom" data-day="1">T</button>
+                                    <button class="day-btn day-btn-custom" data-day="2">W</button>
+                                    <button class="day-btn day-btn-custom" data-day="3">T</button>
+                                    <button class="day-btn day-btn-custom" data-day="4">F</button>
+                                    <button class="day-btn day-btn-custom" data-day="5">S</button>
+                                    <button class="day-btn day-btn-custom" data-day="6">S</button>
+                                </div>
+                            </div>
+                        </div>
+                        <span class="input-hint margin-top-8">Automatically starts messaging using the template and range settings above on the selected days and time.</span>
+                        
+                        <button id="btn-save-custom-msg-schedule" class="btn btn-secondary btn-sm margin-top-12 btn-full-width" disabled>
+                            <i data-lucide="save"></i> Save Message Settings
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- MAIN TABLE PANEL -->
             <div class="glass-card panel-card" style="height: 100%;">
             <div class="filter-bar" style="border-radius: 0; border-top: none; border-left: none; border-right: none;">
@@ -171,7 +251,7 @@
                     <option value="Connected">Connected</option>
                     <option value="Extracted">Extracted</option>
                 </select>
-                <button id="btn-toggle-scheduler" class="btn btn-secondary-outline" style="width: auto; margin-left: auto;">
+                <button id="btn-toggle-scheduler" class="btn btn-secondary-outline" style="width: auto; margin-left: auto; white-space: nowrap;">
                     <i data-lucide="settings"></i> Toggle Scheduler
                 </button>
                 <button id="btn-refresh" class="btn btn-primary btn-glow" style="width: auto; margin-left: 8px;">
@@ -203,7 +283,8 @@
                     </tbody>
                 </table>
         </div>
-        </div>
+            </div>
+            <!-- END RIGHT COLUMN WRAPPER -->
         </div>
     </div>
     <script src="leads.js"></script>
